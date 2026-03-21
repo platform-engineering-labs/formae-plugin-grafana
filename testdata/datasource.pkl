@@ -27,5 +27,6 @@ forma {
     datasourceType = "prometheus"
     url = "http://localhost:9090"
     access = "proxy"
+    isDefault = true
   }
 }

@@ -105,9 +105,9 @@ func (h *DashboardHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 	}
 
 	full := resp.GetPayload()
-	dashboardJSON, _ := json.Marshal(full.Dashboard)
 
-	// Extract uid and title from the dashboard model
+	// Extract uid and title from the dashboard model, then strip
+	// server-managed fields so configJson only contains user config.
 	dashboardMap, _ := full.Dashboard.(map[string]interface{})
 	uid := nativeID
 	title := ""
@@ -118,7 +118,13 @@ func (h *DashboardHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 		if t, ok := dashboardMap["title"].(string); ok {
 			title = t
 		}
+		// Remove server-managed fields from the dashboard model
+		delete(dashboardMap, "id")
+		delete(dashboardMap, "uid")
+		delete(dashboardMap, "title")
+		delete(dashboardMap, "version")
 	}
+	dashboardJSON, _ := json.Marshal(full.Dashboard)
 
 	folderUID := ""
 	if full.Meta != nil {
