@@ -1,0 +1,62 @@
+/// Grafana alert rule resource.
+module alerting.alert_rule
+
+import "@formae/formae.pkl"
+
+/// An individual Grafana alert rule.
+/// Alert rules evaluate queries and fire alerts when conditions are met.
+@formae.ResourceHint {
+  type = "Grafana::Alerting::AlertRule"
+  identifier = "$.uid"
+}
+class AlertRule extends formae.Resource {
+  fixed hidden type: String = "Grafana::Alerting::AlertRule"
+
+  /// Unique identifier. Auto-generated if not specified.
+  @formae.FieldHint { createOnly = true }
+  uid: String?
+
+  /// Display title of the alert rule.
+  @formae.FieldHint {}
+  title: String
+
+  /// UID of the folder containing this rule.
+  @formae.FieldHint {}
+  folderUid: String
+
+  /// Name of the rule group this rule belongs to.
+  @formae.FieldHint {}
+  ruleGroup: String
+
+  /// Reference to the query/condition that triggers the alert (e.g., "A", "B").
+  @formae.FieldHint {}
+  condition: String
+
+  /// Duration that the condition must be true before firing.
+  /// Format: Go duration string (e.g., "5m", "1h").
+  @formae.FieldHint {}
+  pendingPeriod: String = "5m0s"
+
+  /// Alert query and expression definitions as a JSON string.
+  /// Array of query objects with refId, datasourceUid, model, etc.
+  @formae.FieldHint {}
+  data: String
+
+  /// Behavior when the query returns no data.
+  /// One of: "NoData", "Alerting", "OK".
+  @formae.FieldHint {}
+  noDataState: String = "NoData"
+
+  /// Behavior when the query execution fails.
+  /// One of: "Error", "Alerting", "OK".
+  @formae.FieldHint {}
+  execErrState: String = "Error"
+
+  /// Labels to attach to the alert. JSON string of key-value pairs.
+  @formae.FieldHint {}
+  labels: String?
+
+  /// Annotations to attach to the alert. JSON string of key-value pairs.
+  @formae.FieldHint {}
+  annotations: String?
+}

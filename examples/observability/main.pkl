@@ -1,0 +1,108 @@
+/// Formae observability stack: LGTM + Grafana dashboards.
+///
+/// Deploys a Grafana LGTM stack via Docker Compose and provisions
+/// Grafana dashboards using a target resolvable. The Compose plugin
+/// exposes the Grafana endpoint, which is resolved into the Grafana
+/// target config automatically.
+///
+/// Requirements:
+///   - formae >= 0.83.0
+///   - formae-plugin-grafana
+///   - formae-plugin-compose
+///   - Docker with Compose plugin
+amends "@formae/forma.pkl"
+
+import "@formae/formae.pkl"
+import "@compose/compose.pkl"
+import "@grafana/grafana.pkl"
+import "@grafana/core/folder.pkl"
+import "@grafana/core/dashboard.pkl"
+
+local dashboardRepo = "https://raw.githubusercontent.com/platform-engineering-labs/formae-grafana-dashboards/main/dashboards"
+local overviewJson = read("\(dashboardRepo)/formae-overview.json").text
+local pluginsJson = read("\(dashboardRepo)/formae-plugin.json").text
+
+// The compose stack that provides infrastructure
+local lgtmStack = new compose.Stack {
+  label = "lgtm"
+  projectName = "formae-observability"
+  composeFile = #"""
+    services:
+      lgtm:
+        image: grafana/otel-lgtm:latest
+        ports:
+          - "3000:3000"
+          - "4317:4317"
+          - "4318:4318"
+          - "9090:9090"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+          interval: 2s
+          timeout: 5s
+          retries: 30
+          start_period: 10s
+    """#
+  endpoints = new Mapping {
+    ["grafana"] = "lgtm:3000"
+    ["otlp-grpc"] = "lgtm:4317"
+    ["otlp-http"] = "lgtm:4318"
+    ["prometheus"] = "lgtm:9090"
+  }
+}
+
+forma {
+  new formae.Stack {
+    label = "observability"
+    description = "Formae observability stack: LGTM + Grafana dashboards"
+  }
+
+  // Docker target for compose operations
+  new formae.Target {
+    label = "docker"
+    namespace = "DOCKER"
+    config = new compose.Config {}
+  }
+
+  // Grafana target — resolved from compose stack endpoints
+  local grafanaTarget = new formae.Target {
+    label = "grafana"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Endpoints"] = lgtmStack.res.endpoints
+      ["EndpointKey"] = "grafana"
+    }
+  }
+  grafanaTarget
+
+  // The LGTM compose stack
+  lgtmStack
+
+  // Dashboards folder
+  new folder.Folder {
+    label = "formae-dashboards"
+    target = grafanaTarget.res
+    uid = "formae-dashboards"
+    title = "Formae Dashboards"
+  }
+
+  // Formae Agent dashboard
+  new dashboard.Dashboard {
+    label = "formae-overview"
+    target = grafanaTarget.res
+    uid = "formae-overview"
+    title = "Formae Agent"
+    folderUid = "formae-dashboards"
+    configJson = overviewJson
+  }
+
+  // Formae Plugins dashboard
+  new dashboard.Dashboard {
+    label = "formae-plugins"
+    target = grafanaTarget.res
+    uid = "formae-plugins"
+    title = "Formae Plugins"
+    folderUid = "formae-dashboards"
+    configJson = pluginsJson
+  }
+}

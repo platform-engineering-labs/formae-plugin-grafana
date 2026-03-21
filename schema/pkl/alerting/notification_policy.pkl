@@ -1,0 +1,44 @@
+/// Grafana notification policy resource.
+module alerting.notification_policy
+
+import "@formae/formae.pkl"
+
+/// The Grafana notification policy routing tree.
+/// This is a singleton resource per organization — there is exactly one
+/// notification policy that routes alerts to contact points.
+@formae.ResourceHint {
+  type = "Grafana::Alerting::NotificationPolicy"
+  identifier = "$.receiver"
+}
+class NotificationPolicy extends formae.Resource {
+  fixed hidden type: String = "Grafana::Alerting::NotificationPolicy"
+
+  /// Name of the default contact point (receiver).
+  @formae.FieldHint {}
+  receiver: String
+
+  /// Fields to group alerts by (e.g., ["alertname", "grafana_folder"]).
+  /// Provided as a JSON array of strings.
+  @formae.FieldHint {}
+  groupBy: String?
+
+  /// How long to wait before sending the first notification for a new group.
+  /// Format: Go duration string (e.g., "30s", "5m").
+  @formae.FieldHint {}
+  groupWait: String?
+
+  /// How long to wait before sending updates for a group.
+  /// Format: Go duration string (e.g., "5m", "1h").
+  @formae.FieldHint {}
+  groupInterval: String?
+
+  /// How long to wait before resending a notification.
+  /// Format: Go duration string (e.g., "4h", "1d").
+  @formae.FieldHint {}
+  repeatInterval: String?
+
+  /// Child routing rules as a JSON string.
+  /// Array of route objects with receiver, matchers, groupBy, etc.
+  @formae.FieldHint {}
+  routes: String?
+}

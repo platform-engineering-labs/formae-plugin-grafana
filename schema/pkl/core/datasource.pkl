@@ -1,0 +1,67 @@
+/// Grafana data source resource.
+module core.datasource
+
+import "@formae/formae.pkl"
+
+/// A Grafana data source connection (Prometheus, Loki, InfluxDB, etc.).
+@formae.ResourceHint {
+  type = "Grafana::Core::DataSource"
+  identifier = "$.uid"
+}
+class DataSource extends formae.Resource {
+  fixed hidden type: String = "Grafana::Core::DataSource"
+
+  /// Unique identifier. Auto-generated if not specified.
+  /// Cannot be changed after creation.
+  @formae.FieldHint { createOnly = true }
+  uid: String?
+
+  /// Display name of the data source.
+  @formae.FieldHint {}
+  name: String
+
+  /// Data source type plugin ID (e.g., "prometheus", "loki", "influxdb").
+  /// Cannot be changed after creation.
+  @formae.FieldHint { createOnly = true }
+  datasourceType: String
+
+  /// URL of the data source backend.
+  @formae.FieldHint {}
+  url: String?
+
+  /// Access mode: "proxy" (server-side) or "direct" (browser-side).
+  @formae.FieldHint {}
+  access: String = "proxy"
+
+  /// Whether this is the default data source for the organization.
+  @formae.FieldHint {}
+  isDefault: Boolean = false
+
+  /// Whether basic auth is enabled.
+  @formae.FieldHint {}
+  basicAuth: Boolean = false
+
+  /// Basic auth username (if basicAuth is enabled).
+  @formae.FieldHint {}
+  basicAuthUser: String?
+
+  /// Type-specific configuration as a JSON string.
+  /// The structure depends on the data source type.
+  @formae.FieldHint {}
+  jsonData: String?
+
+  /// Sensitive configuration as a JSON string (e.g., passwords, tokens).
+  /// Write-only: values are never returned by the API.
+  @formae.FieldHint { writeOnly = true }
+  secureJsonData: String?
+}
+
+/// Resolvable reference to a DataSource.
+class DataSourceResolvable extends formae.Resolvable {
+  res: DataSourceRef
+}
+
+class DataSourceRef {
+  uid: String
+  name: String
+}

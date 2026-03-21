@@ -1,0 +1,31 @@
+/// Grafana team resource.
+module core.team
+
+import "@formae/formae.pkl"
+
+/// A Grafana team for organizing users and managing permissions.
+@formae.ResourceHint {
+  type = "Grafana::Core::Team"
+  identifier = "$.id"
+}
+class Team extends formae.Resource {
+  fixed hidden type: String = "Grafana::Core::Team"
+
+  /// Display name of the team.
+  @formae.FieldHint {}
+  name: String
+
+  /// Contact email for the team.
+  @formae.FieldHint {}
+  email: String?
+}
+
+/// Resolvable reference to a Team.
+class TeamResolvable extends formae.Resolvable {
+  res: TeamRef
+}
+
+class TeamRef {
+  id: String
+  name: String
+}

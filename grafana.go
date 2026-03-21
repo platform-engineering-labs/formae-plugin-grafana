@@ -1,186 +1,205 @@
-// © 2025 Platform Engineering Labs Inc.
-//
-// SPDX-License-Identifier: Apache-2.0
-
 package main
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"fmt"
+	"sync"
 
+	goapi "github.com/grafana/grafana-openapi-client-go/client"
 	"github.com/platform-engineering-labs/formae/pkg/plugin"
 	"github.com/platform-engineering-labs/formae/pkg/plugin/resource"
+
+	"github.com/platform-engineering-labs/formae-plugin-grafana/pkg/config"
+	"github.com/platform-engineering-labs/formae-plugin-grafana/pkg/handler"
 )
 
-// ErrNotImplemented is returned by stub methods that need implementation.
-var ErrNotImplemented = errors.New("not implemented")
+// Plugin implements the Formae ResourcePlugin interface for Grafana.
+type Plugin struct {
+	mu      sync.Mutex
+	clients map[string]*goapi.GrafanaHTTPAPI
+}
 
-// Plugin implements the Formae ResourcePlugin interface.
-// The SDK automatically provides identity methods (Name, Version, Namespace)
-// by reading formae-plugin.pkl at startup.
-type Plugin struct{}
-
-// Compile-time check: Plugin must satisfy ResourcePlugin interface.
 var _ plugin.ResourcePlugin = &Plugin{}
 
-// =============================================================================
-// Configuration Methods
-// =============================================================================
+// getClient returns a cached Grafana API client for the given target config.
+func (p *Plugin) getClient(targetConfig json.RawMessage) (*goapi.GrafanaHTTPAPI, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-// RateLimit returns the rate limiting configuration for this plugin.
-// Adjust MaxRequestsPerSecondForNamespace based on your provider's API limits.
+	if p.clients == nil {
+		p.clients = make(map[string]*goapi.GrafanaHTTPAPI)
+	}
+
+	key := string(targetConfig)
+	if client, ok := p.clients[key]; ok {
+		return client, nil
+	}
+
+	cfg, err := config.ParseTargetConfig(targetConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := config.NewClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	p.clients[key] = client
+	return client, nil
+}
+
+// RateLimit returns the rate limiting configuration.
+// Grafana Cloud has rate limits; self-hosted may not, but we set a reasonable default.
 func (p *Plugin) RateLimit() plugin.RateLimitConfig {
 	return plugin.RateLimitConfig{
 		Scope:                            plugin.RateLimitScopeNamespace,
-		MaxRequestsPerSecondForNamespace: 10, // TODO: Adjust based on provider limits
+		MaxRequestsPerSecondForNamespace: 10,
 	}
 }
 
-// DiscoveryFilters returns filters to exclude certain resources from discovery.
-// Resources matching ALL conditions in a filter are excluded.
-// Return nil if you want to discover all resources.
+// DiscoveryFilters returns filters to exclude resources from discovery.
 func (p *Plugin) DiscoveryFilters() []plugin.MatchFilter {
-	// Example: exclude resources with a specific tag
-	// return []plugin.MatchFilter{
-	//     {
-	//         ResourceTypes: []string{"GRAFANA::Service::Resource"},
-	//         Conditions: []plugin.FilterCondition{
-	//             {PropertyPath: "$.Tags[?(@.Key=='skip-discovery')].Value", PropertyValue: "true"},
-	//         },
-	//     },
-	// }
 	return nil
 }
 
-// LabelConfig returns the configuration for extracting human-readable labels
-// from discovered resources.
+// LabelConfig returns the configuration for extracting human-readable labels.
 func (p *Plugin) LabelConfig() plugin.LabelConfig {
 	return plugin.LabelConfig{
-		// Default JSONPath query to extract label from resources
-		// Example for tagged resources: $.Tags[?(@.Key=='Name')].Value
-		DefaultQuery: "$.Name", // TODO: Adjust for your provider
-
-		// Override for specific resource types
+		DefaultQuery: "$.title",
 		ResourceOverrides: map[string]string{
-			// "GRAFANA::Service::SpecialResource": "$.DisplayName",
+			"Grafana::Core::DataSource":             "$.name",
+			"Grafana::Core::Team":                   "$.name",
+			"Grafana::Core::ServiceAccount":         "$.name",
+			"Grafana::Alerting::AlertRule":           "$.title",
+			"Grafana::Alerting::ContactPoint":        "$.name",
+			"Grafana::Alerting::NotificationPolicy":  "$.receiver",
+			"Grafana::Alerting::MuteTiming":          "$.name",
+			"Grafana::Alerting::MessageTemplate":     "$.name",
 		},
 	}
 }
 
-// =============================================================================
-// CRUD Operations
-// =============================================================================
-
-// Create provisions a new resource.
+// Create provisions a new Grafana resource.
 func (p *Plugin) Create(ctx context.Context, req *resource.CreateRequest) (*resource.CreateResult, error) {
-	// TODO: Implement resource creation
-	//
-	// 1. Parse req.Properties to get resource configuration (json.RawMessage)
-	// 2. Parse req.TargetConfig to get provider credentials/config
-	// 3. Call your provider's API to create the resource
-	// 4. Return ProgressResult with:
-	//    - NativeID: the provider's identifier for the resource
-	//    - OperationStatus: Success, Failure, or InProgress
-	//    - If InProgress, set RequestID for status polling
+	h, err := handler.Get(req.ResourceType)
+	if err != nil {
+		return &resource.CreateResult{
+			ProgressResult: handler.FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, err.Error()),
+		}, nil
+	}
 
-	return &resource.CreateResult{
-		ProgressResult: &resource.ProgressResult{
-			Operation:       resource.OperationCreate,
-			OperationStatus: resource.OperationStatusFailure,
-			ErrorCode:       resource.OperationErrorCodeInternalFailure,
-			StatusMessage:   "Create not implemented",
-		},
-	}, ErrNotImplemented
+	client, err := p.getClient(req.TargetConfig)
+	if err != nil {
+		return &resource.CreateResult{
+			ProgressResult: handler.FailResult(resource.OperationCreate, resource.OperationErrorCodeNetworkFailure, fmt.Sprintf("failed to create Grafana client: %v", err)),
+		}, nil
+	}
+
+	result, err := h.Create(ctx, client, req.Properties)
+	if err != nil {
+		return &resource.CreateResult{
+			ProgressResult: handler.FailResult(resource.OperationCreate, resource.OperationErrorCodeInternalFailure, err.Error()),
+		}, nil
+	}
+	return &resource.CreateResult{ProgressResult: result}, nil
 }
 
-// Read retrieves the current state of a resource.
+// Read retrieves the current state of a Grafana resource.
 func (p *Plugin) Read(ctx context.Context, req *resource.ReadRequest) (*resource.ReadResult, error) {
-	// TODO: Implement resource read
-	//
-	// 1. Use req.NativeID to identify the resource
-	// 2. Parse req.TargetConfig for provider credentials
-	// 3. Call your provider's API to get current state
-	// 4. Return ReadResult with Properties as JSON string
+	h, err := handler.Get(req.ResourceType)
+	if err != nil {
+		return &resource.ReadResult{
+			ResourceType: req.ResourceType,
+			ErrorCode:    resource.OperationErrorCodeInvalidRequest,
+		}, nil
+	}
 
-	return &resource.ReadResult{
-		ResourceType: req.ResourceType,
-		ErrorCode:    resource.OperationErrorCodeInternalFailure,
-	}, ErrNotImplemented
+	client, err := p.getClient(req.TargetConfig)
+	if err != nil {
+		return &resource.ReadResult{
+			ResourceType: req.ResourceType,
+			ErrorCode:    resource.OperationErrorCodeNetworkFailure,
+		}, nil
+	}
+
+	return h.Read(ctx, client, req.NativeID)
 }
 
-// Update modifies an existing resource.
+// Update modifies an existing Grafana resource.
 func (p *Plugin) Update(ctx context.Context, req *resource.UpdateRequest) (*resource.UpdateResult, error) {
-	// TODO: Implement resource update
-	//
-	// 1. Use req.NativeID to identify the resource
-	// 2. Use req.PatchDocument for changes (JSON Patch format)
-	//    Or compare req.PriorProperties with req.DesiredProperties
-	// 3. Call your provider's API to apply changes
-	// 4. Return ProgressResult with status
+	h, err := handler.Get(req.ResourceType)
+	if err != nil {
+		return &resource.UpdateResult{
+			ProgressResult: handler.FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, err.Error()),
+		}, nil
+	}
 
-	return &resource.UpdateResult{
-		ProgressResult: &resource.ProgressResult{
-			Operation:       resource.OperationUpdate,
-			OperationStatus: resource.OperationStatusFailure,
-			ErrorCode:       resource.OperationErrorCodeInternalFailure,
-			StatusMessage:   "Update not implemented",
-		},
-	}, ErrNotImplemented
+	client, err := p.getClient(req.TargetConfig)
+	if err != nil {
+		return &resource.UpdateResult{
+			ProgressResult: handler.FailResult(resource.OperationUpdate, resource.OperationErrorCodeNetworkFailure, fmt.Sprintf("failed to create Grafana client: %v", err)),
+		}, nil
+	}
+
+	result, err := h.Update(ctx, client, req.NativeID, req.PriorProperties, req.DesiredProperties)
+	if err != nil {
+		return &resource.UpdateResult{
+			ProgressResult: handler.FailResult(resource.OperationUpdate, resource.OperationErrorCodeInternalFailure, err.Error()),
+		}, nil
+	}
+	return &resource.UpdateResult{ProgressResult: result}, nil
 }
 
-// Delete removes a resource.
+// Delete removes a Grafana resource.
 func (p *Plugin) Delete(ctx context.Context, req *resource.DeleteRequest) (*resource.DeleteResult, error) {
-	// TODO: Implement resource deletion
-	//
-	// 1. Use req.NativeID to identify the resource
-	// 2. Parse req.TargetConfig for provider credentials
-	// 3. Call your provider's API to delete the resource
-	// 4. Return ProgressResult with status
+	h, err := handler.Get(req.ResourceType)
+	if err != nil {
+		return &resource.DeleteResult{
+			ProgressResult: handler.FailResult(resource.OperationDelete, resource.OperationErrorCodeInvalidRequest, err.Error()),
+		}, nil
+	}
 
-	return &resource.DeleteResult{
-		ProgressResult: &resource.ProgressResult{
-			Operation:       resource.OperationDelete,
-			OperationStatus: resource.OperationStatusFailure,
-			ErrorCode:       resource.OperationErrorCodeInternalFailure,
-			StatusMessage:   "Delete not implemented",
-		},
-	}, ErrNotImplemented
+	client, err := p.getClient(req.TargetConfig)
+	if err != nil {
+		return &resource.DeleteResult{
+			ProgressResult: handler.FailResult(resource.OperationDelete, resource.OperationErrorCodeNetworkFailure, fmt.Sprintf("failed to create Grafana client: %v", err)),
+		}, nil
+	}
+
+	result, err := h.Delete(ctx, client, req.NativeID)
+	if err != nil {
+		return &resource.DeleteResult{
+			ProgressResult: handler.FailResult(resource.OperationDelete, resource.OperationErrorCodeInternalFailure, err.Error()),
+		}, nil
+	}
+	return &resource.DeleteResult{ProgressResult: result}, nil
 }
 
 // Status checks the progress of an async operation.
-// Called when Create/Update/Delete return InProgress status.
+// All Grafana API operations are synchronous, so this always returns Success.
 func (p *Plugin) Status(ctx context.Context, req *resource.StatusRequest) (*resource.StatusResult, error) {
-	// TODO: Implement status checking for async operations
-	//
-	// 1. Use req.RequestID to identify the operation
-	// 2. Call your provider's API to check operation status
-	// 3. Return ProgressResult with current status
-	//
-	// If your provider's operations are synchronous, return Success immediately.
-
 	return &resource.StatusResult{
 		ProgressResult: &resource.ProgressResult{
 			Operation:       resource.OperationCheckStatus,
-			OperationStatus: resource.OperationStatusFailure,
-			ErrorCode:       resource.OperationErrorCodeInternalFailure,
-			StatusMessage:   "Status not implemented",
+			OperationStatus: resource.OperationStatusSuccess,
+			RequestID:       req.RequestID,
 		},
-	}, ErrNotImplemented
+	}, nil
 }
 
-// List returns all resource identifiers of a given type.
-// Called during discovery to find unmanaged resources.
+// List returns all resource identifiers of a given type for discovery.
 func (p *Plugin) List(ctx context.Context, req *resource.ListRequest) (*resource.ListResult, error) {
-	// TODO: Implement resource listing for discovery
-	//
-	// 1. Use req.ResourceType to determine what to list
-	// 2. Parse req.TargetConfig for provider credentials
-	// 3. Use req.PageToken/PageSize for pagination
-	// 4. Call your provider's API to list resources
-	// 5. Return NativeIDs and NextPageToken (if more pages)
+	h, err := handler.Get(req.ResourceType)
+	if err != nil {
+		return &resource.ListResult{NativeIDs: []string{}}, nil
+	}
 
-	return &resource.ListResult{
-		NativeIDs:     []string{},
-		NextPageToken: nil,
-	}, ErrNotImplemented
+	client, err := p.getClient(req.TargetConfig)
+	if err != nil {
+		return &resource.ListResult{NativeIDs: []string{}}, nil
+	}
+
+	return h.List(ctx, client, req.PageSize, req.PageToken)
 }

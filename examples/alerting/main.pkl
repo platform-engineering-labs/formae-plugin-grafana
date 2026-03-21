@@ -1,0 +1,58 @@
+/// Alerting example: set up contact points, notification policies, and alert rules.
+amends "@formae/forma.pkl"
+
+import "@formae/formae.pkl"
+import "@grafana/grafana.pkl"
+import "@grafana/core/folder.pkl"
+import "@grafana/alerting/contact_point.pkl"
+import "@grafana/alerting/mute_timing.pkl"
+import "@grafana/alerting/message_template.pkl"
+
+forma {
+  new formae.Stack {
+    label = "default"
+    description = "Example Grafana alerting resources"
+  }
+
+  new formae.Target {
+    label = "grafana"
+    namespace = "GRAFANA"
+    config = new grafana.Config {
+      url = "http://localhost:3000"
+    }
+  }
+
+  new folder.Folder {
+    label = "alerts-folder"
+    uid = "alerts"
+    title = "Alerts"
+  }
+
+  new contact_point.ContactPoint {
+    label = "slack-alerts"
+    name = "Slack Alerts"
+    contactPointType = "slack"
+    settings = ##"{"url":"https://hooks.slack.com/services/xxx/yyy/zzz","recipient":"#alerts"}"##
+  }
+
+  new mute_timing.MuteTiming {
+    label = "weekends"
+    name = "weekends"
+    timeIntervals = #"""
+      [{"weekdays":["saturday","sunday"]}]
+      """#
+  }
+
+  new message_template.MessageTemplate {
+    label = "custom-alert"
+    name = "custom-alert"
+    template = #"""
+      {{ define "custom-alert" }}
+        [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}
+        {{ range .Alerts }}
+          - {{ .Labels.instance }}: {{ .Annotations.summary }}
+        {{ end }}
+      {{ end }}
+      """#
+  }
+}

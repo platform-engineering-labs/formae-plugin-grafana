@@ -1,80 +1,85 @@
-> **⚠️ Do not clone this repository directly!**
->
-> Use `formae plugin init` to create your plugin. This command scaffolds a new
-> plugin from this template with proper naming and configuration.
->
-> ```bash
-> formae plugin init my-plugin
-> ```
+# Grafana Plugin for formae
 
----
-
-## Setup Checklist
-
-*Remove this section and the warning above after completing setup.*
-
-After creating your plugin with `formae plugin init`, complete these steps:
-
-- [ ] Update `formae-plugin.pkl` with your plugin metadata (name, namespace, description)
-- [ ] Define your resource types in `schema/pkl/*.pkl`
-- [ ] Implement CRUD operations in `plugin.go`
-- [ ] Update test fixtures in `testdata/*.pkl` to use your resources
-- [ ] Update this README (replace title, description, resources table, etc.)
-- [ ] Set up local credentials for testing
-- [ ] Run conformance tests locally: `make conformance-test`
-- [ ] Configure CI credentials in `.github/workflows/ci.yml` (optional)
-- [ ] Remove this checklist section and the warning box above
-
-For detailed guidance, see the [Plugin SDK Documentation](https://docs.formae.io/plugin-sdk).
-
----
-
-# Example Plugin for formae
-
-*TODO: Update title and description for your plugin*
-
-Example Formae plugin template - replace this with a description of what your plugin manages.
+Manage Grafana instance resources declaratively — dashboards, data sources, folders, alerting, teams, and service accounts. Works with both self-hosted Grafana and Grafana Cloud instances.
 
 ## Installation
 
 ```bash
-# Install the plugin
 make install
 ```
 
 ## Supported Resources
 
-*TODO: Document your supported resource types*
+### Core
 
-| Resource Type | Description |
-|---------------|-------------|
-| `GRAFANA::Service::Resource` | Example resource (replace with your actual resources) |
+| Resource Type | Description | Native ID |
+|---|---|---|
+| `Grafana::Core::Folder` | Dashboard folders with nested hierarchy support | `uid` |
+| `Grafana::Core::Dashboard` | Dashboard definitions (JSON model) | `uid` |
+| `Grafana::Core::DataSource` | Data source connections (Prometheus, Loki, etc.) | `uid` |
+| `Grafana::Core::Team` | Teams for organizing users and permissions | `id` |
+| `Grafana::Core::ServiceAccount` | Service accounts for programmatic API access | `id` |
+
+### Alerting
+
+| Resource Type | Description | Native ID |
+|---|---|---|
+| `Grafana::Alerting::AlertRule` | Individual alert rules with query conditions | `uid` |
+| `Grafana::Alerting::ContactPoint` | Notification channels (Slack, email, PagerDuty, etc.) | `uid` |
+| `Grafana::Alerting::NotificationPolicy` | Alert routing tree (singleton per org) | `receiver` |
+| `Grafana::Alerting::MuteTiming` | Time windows for suppressing notifications | `name` |
+| `Grafana::Alerting::MessageTemplate` | Go templates for notification formatting | `name` |
 
 ## Configuration
 
-Configure a target in your Forma file:
+### Target
+
+Configure a Grafana target in your forma file:
 
 ```pkl
+import "@grafana/grafana.pkl"
+
 new formae.Target {
-    label = "my-target"
-    namespace = "GRAFANA"  // TODO: Update with your namespace
-    config = new Mapping {
-        ["region"] = "us-east-1"
-        // TODO: Add your provider-specific configuration
-    }
+  label = "my-grafana"
+  namespace = "GRAFANA"
+  config = new grafana.Config {
+    url = "https://grafana.example.com"
+    // orgId = 1  // optional, defaults to token's org
+  }
 }
+```
+
+### Credentials
+
+Set the `GRAFANA_AUTH` environment variable. Supported formats:
+
+| Format | Example |
+|---|---|
+| Service account token | `glsa_xxxxxxxxxxxx` |
+| API key (legacy) | `eyJrIjoi...` |
+| Basic auth | `admin:password` |
+
+```bash
+export GRAFANA_AUTH="glsa_your_service_account_token"
 ```
 
 ## Examples
 
-See the [examples/](examples/) directory for usage examples.
+See the [examples/](examples/) directory.
 
+**Basic** — folder, data source, dashboard:
 ```bash
-# Evaluate an example
-formae eval examples/basic/main.pkl
-
-# Apply resources
 formae apply --mode reconcile --watch examples/basic/main.pkl
+```
+
+**Alerting** — contact points, mute timings, templates:
+```bash
+formae apply --mode reconcile --watch examples/alerting/main.pkl
+```
+
+**Observability** — LGTM stack via Docker Compose with Grafana dashboards provisioned through a target resolvable (requires formae >= 0.83.0 and formae-plugin-compose):
+```bash
+formae apply --mode reconcile --watch examples/observability/main.pkl
 ```
 
 ## Development
@@ -83,52 +88,26 @@ formae apply --mode reconcile --watch examples/basic/main.pkl
 
 - Go 1.25+
 - [Pkl CLI](https://pkl-lang.org/main/current/pkl-cli/index.html)
-- Cloud provider credentials (for conformance testing)
+- Docker (for test infrastructure)
 
 ### Building
 
 ```bash
 make build      # Build plugin binary
-make test       # Run unit tests
-make lint       # Run linter
 make install    # Build + install locally
 ```
 
-### Local Testing
+### Testing
 
 ```bash
-# Install plugin locally
-make install
-
-# Start formae agent
-formae agent start
-
-# Apply example resources
-formae apply --mode reconcile --watch examples/basic/main.pkl
+make test-env-up            # Start Grafana on port 3333
+make test-integration       # Run integration tests
+make conformance-test-crud  # Run CRUD conformance tests
+make test-env-down          # Stop Grafana
 ```
 
-### Conformance Testing
-
-Conformance tests validate your plugin's CRUD lifecycle using the test fixtures in `testdata/`:
-
-| File | Purpose |
-|------|---------|
-| `resource.pkl` | Initial resource creation |
-| `resource-update.pkl` | In-place update (mutable fields) |
-| `resource-replace.pkl` | Replacement (createOnly fields) |
-
-The test harness sets `FORMAE_TEST_RUN_ID` for unique resource naming between runs.
-
-```bash
-make conformance-test                  # Latest formae version
-make conformance-test VERSION=0.80.0   # Specific version
-```
-
-The `scripts/ci/clean-environment.sh` script cleans up test resources. It runs before and after conformance tests and should be idempotent.
+The test infrastructure uses `docker-compose.test.yml` to spin up a Grafana OSS instance on port 3333 with `admin:admin` credentials. Environment variables `GRAFANA_URL` and `GRAFANA_AUTH` are set automatically by the Makefile.
 
 ## Licensing
 
-Plugins are independent works and may be licensed under any license of the author’s choosing.
-
-See the formae plugin policy:
-<https://docs.formae.io/plugin-sdk/
+Licensed under Apache-2.0. See [LICENSE](LICENSE).

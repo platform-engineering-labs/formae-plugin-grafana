@@ -1,0 +1,47 @@
+/// Grafana dashboard resource.
+module core.dashboard
+
+import "@formae/formae.pkl"
+
+/// A Grafana dashboard.
+/// The dashboard body is provided as a JSON string containing panels,
+/// variables, and other dashboard configuration.
+@formae.ResourceHint {
+  type = "Grafana::Core::Dashboard"
+  identifier = "$.uid"
+}
+class Dashboard extends formae.Resource {
+  fixed hidden type: String = "Grafana::Core::Dashboard"
+
+  /// Unique identifier. Auto-generated if not specified.
+  /// Cannot be changed after creation.
+  @formae.FieldHint { createOnly = true }
+  uid: String?
+
+  /// Display title of the dashboard.
+  @formae.FieldHint {}
+  title: String
+
+  /// UID of the folder containing this dashboard.
+  @formae.FieldHint {}
+  folderUid: String?
+
+  /// The complete dashboard model as a JSON string.
+  /// This contains panels, variables, templating, annotations, etc.
+  @formae.FieldHint {}
+  configJson: String
+
+  /// Commit message for the dashboard version history.
+  @formae.FieldHint {}
+  message: String?
+}
+
+/// Resolvable reference to a Dashboard.
+class DashboardResolvable extends formae.Resolvable {
+  res: DashboardRef
+}
+
+class DashboardRef {
+  uid: String
+  url: String
+}

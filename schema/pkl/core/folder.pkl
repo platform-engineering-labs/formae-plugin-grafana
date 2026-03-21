@@ -1,0 +1,36 @@
+/// Grafana folder resource.
+module core.folder
+
+import "@formae/formae.pkl"
+
+/// A folder for organizing dashboards and alert rules.
+@formae.ResourceHint {
+  type = "Grafana::Core::Folder"
+  identifier = "$.uid"
+}
+class Folder extends formae.Resource {
+  fixed hidden type: String = "Grafana::Core::Folder"
+
+  /// Unique identifier. Auto-generated if not specified.
+  /// Cannot be changed after creation.
+  @formae.FieldHint { createOnly = true }
+  uid: String?
+
+  /// Display title of the folder.
+  @formae.FieldHint {}
+  title: String
+
+  /// UID of the parent folder for nested folder hierarchies.
+  /// Omit for top-level folders.
+  @formae.FieldHint {}
+  parentUid: String?
+}
+
+/// Resolvable reference to a Folder.
+class FolderResolvable extends formae.Resolvable {
+  res: FolderRef
+}
+
+class FolderRef {
+  uid: String
+}

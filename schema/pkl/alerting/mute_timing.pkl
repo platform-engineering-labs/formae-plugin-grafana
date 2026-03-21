@@ -1,0 +1,25 @@
+/// Grafana mute timing resource.
+module alerting.mute_timing
+
+import "@formae/formae.pkl"
+
+/// A Grafana mute timing definition.
+/// Mute timings define time windows during which alert notifications are suppressed.
+@formae.ResourceHint {
+  type = "Grafana::Alerting::MuteTiming"
+  identifier = "$.name"
+}
+class MuteTiming extends formae.Resource {
+  fixed hidden type: String = "Grafana::Alerting::MuteTiming"
+
+  /// Name of the mute timing. Used as the identifier.
+  /// Cannot be changed after creation.
+  @formae.FieldHint { createOnly = true }
+  name: String
+
+  /// Time intervals as a JSON string.
+  /// Array of time interval objects defining when notifications are muted.
+  /// Each interval can specify: times, weekdays, days_of_month, months, years, location.
+  @formae.FieldHint {}
+  timeIntervals: String
+}
