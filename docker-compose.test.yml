@@ -1,0 +1,13 @@
+services:
+  grafana:
+    image: grafana/grafana-oss:12.4.1
+    container_name: formae-grafana-test
+    ports:
+      - "3333:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

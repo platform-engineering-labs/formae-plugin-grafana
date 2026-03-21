@@ -138,6 +138,9 @@ jobs:
     # if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.run_conformance == 'true'
     if: ${{ github.event.inputs.run_conformance == 'true' }}
     timeout-minutes: 60
+    env:
+      GRAFANA_URL: http://localhost:3333
+      GRAFANA_AUTH: admin:admin
 
     strategy:
       fail-fast: false
@@ -202,6 +205,9 @@ jobs:
 
       # =================================================================
 
+      - name: Start Grafana test instance
+        run: make test-env-up
+
       - name: Install plugin
         run: make install
 
@@ -215,3 +221,7 @@ jobs:
             VERSION="${{ matrix.formae_version }}"
           fi
           make conformance-test VERSION="$VERSION"
+
+      - name: Stop Grafana test instance
+        if: always()
+        run: make test-env-down

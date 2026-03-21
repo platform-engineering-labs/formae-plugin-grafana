@@ -22,7 +22,7 @@ BINARY := $(PLUGIN_NAME)
 PLUGIN_BASE_DIR := $(HOME)/.pel/formae/plugins
 INSTALL_DIR := $(PLUGIN_BASE_DIR)/$(PLUGIN_NAME)/v$(PLUGIN_VERSION)
 
-.PHONY: all build test test-unit test-integration lint verify-schema clean install help clean-environment conformance-test conformance-test-crud conformance-test-discovery
+.PHONY: all build test test-unit test-integration lint verify-schema clean install help clean-environment test-env-up test-env-down conformance-test conformance-test-crud conformance-test-discovery
 
 all: build
 
@@ -40,7 +40,7 @@ test-unit:
 
 ## test-integration: Run integration tests (requires cloud credentials)
 ## Add tests with //go:build integration tag
-test-integration:
+test-integration: test-env-up
 	$(GO) test -v -tags=integration ./...
 
 ## lint: Run golangci-lint
@@ -82,6 +82,18 @@ help:
 clean-environment:
 	@./scripts/ci/clean-environment.sh
 
+# Test environment variables
+export GRAFANA_URL ?= http://localhost:3333
+export GRAFANA_AUTH ?= admin:admin
+
+## test-env-up: Start Grafana test instance (port 3333)
+test-env-up:
+	docker compose -f docker-compose.test.yml up -d --wait
+
+## test-env-down: Stop and remove Grafana test instance
+test-env-down:
+	docker compose -f docker-compose.test.yml down -v --remove-orphans
+
 ## conformance-test: Run all conformance tests (CRUD + discovery)
 ## Usage: make conformance-test [VERSION=0.80.0] [TEST=s3-bucket] [TIMEOUT=15]
 ## Downloads the specified formae version (or latest) and runs conformance tests.
@@ -95,7 +107,7 @@ conformance-test: conformance-test-crud conformance-test-discovery
 
 ## conformance-test-crud: Run only CRUD lifecycle tests
 ## Usage: make conformance-test-crud [VERSION=0.80.0] [TEST=s3-bucket] [TIMEOUT=15]
-conformance-test-crud: install
+conformance-test-crud: install test-env-up
 	@echo "Pre-test cleanup..."
 	@./scripts/ci/clean-environment.sh || true
 	@echo ""
@@ -109,7 +121,7 @@ conformance-test-crud: install
 
 ## conformance-test-discovery: Run only discovery tests
 ## Usage: make conformance-test-discovery [VERSION=0.80.0] [TEST=s3-bucket] [TIMEOUT=15]
-conformance-test-discovery: install
+conformance-test-discovery: install test-env-up
 	@echo "Pre-test cleanup..."
 	@./scripts/ci/clean-environment.sh || true
 	@echo ""

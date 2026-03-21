@@ -1,61 +1,117 @@
 #!/bin/bash
-# © 2025 Platform Engineering Labs Inc.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Clean Environment Hook
-# ======================
-# This script is called before AND after conformance tests to clean up
-# test resources in your cloud environment.
-#
-# Purpose:
-# - Before tests: Remove orphaned resources from previous failed runs
-# - After tests: Clean up resources created during the test run
-#
-# The script should be idempotent - safe to run multiple times.
-# It should delete all resources matching the test resource prefix.
-#
-# Test resources typically use a naming convention like:
-#   formae-plugin-sdk-test-{run-id}-*
-#
-# Implementation varies by provider. Examples:
-#
-# AWS:
-#   - List and delete resources with test prefix using AWS CLI
-#   - Use resource tagging for easier identification
-#
-# OpenStack:
-#   - Use openstack CLI to list and delete test resources
-#   - Clean up in order: instances, volumes, networks, security groups, etc.
-#
-# Exit with non-zero status only for unexpected errors.
-# Missing resources (already cleaned) should not cause failures.
-
 set -euo pipefail
 
-# Prefix used for test resources - should match what conformance tests create
-TEST_PREFIX="${TEST_PREFIX:-formae-plugin-sdk-test-}"
+# Clean up test resources in Grafana
+# Requires GRAFANA_URL and GRAFANA_AUTH environment variables
 
-echo "clean-environment.sh: Cleaning resources with prefix '${TEST_PREFIX}'"
-echo ""
-echo "To implement cleanup for your provider, edit this script."
-echo "See comments in this file for examples."
-echo ""
+GRAFANA_URL="${GRAFANA_URL:-http://localhost:3000}"
+GRAFANA_AUTH="${GRAFANA_AUTH:-}"
 
-# Uncomment and modify for your provider:
-#
-# # AWS - clean up S3 buckets with test prefix
-# echo "Cleaning S3 buckets..."
-# aws s3api list-buckets --query "Buckets[?starts_with(Name, '${TEST_PREFIX}')].Name" --output text | \
-#     xargs -r -n1 aws s3 rb --force s3://
-#
-# # OpenStack - clean up instances
-# echo "Cleaning instances..."
-# openstack server list --name "^${TEST_PREFIX}" -f value -c ID | \
-#     xargs -r -n1 openstack server delete --wait
-#
-# # OpenStack - clean up volumes
-# echo "Cleaning volumes..."
-# openstack volume list --name "^${TEST_PREFIX}" -f value -c ID | \
-#     xargs -r -n1 openstack volume delete
+if [ -z "$GRAFANA_AUTH" ]; then
+    echo "clean-environment.sh: GRAFANA_AUTH not set, skipping cleanup"
+    exit 0
+fi
 
-echo "clean-environment.sh: Cleanup complete (no-op - not configured)"
+echo "clean-environment.sh: Cleaning up test resources in ${GRAFANA_URL}"
+
+# Helper: filter JSON array items where a field starts with a test prefix, printing that field's value.
+# Usage: filter_by_prefix <field>
+filter_by_prefix() {
+    local field="$1"
+    python3 -c "
+import json, sys
+try:
+    items = json.load(sys.stdin)
+    for item in items:
+        val = item.get('${field}', '')
+        if val.startswith('formae-test-') or val.startswith('formae-integ-test-'):
+            print(val)
+except:
+    pass
+" 2>/dev/null
+}
+
+# 1. Alert rules (depend on folders + datasources, delete first)
+ALERT_RULES=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/alert-rules" 2>/dev/null || echo "[]")
+echo "$ALERT_RULES" | filter_by_prefix uid | while read -r uid; do
+    echo "  Deleting alert rule: $uid"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/alert-rules/${uid}" >/dev/null 2>&1 || true
+done
+
+# 2. Dashboards (depend on folders)
+DASHBOARDS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/search?type=dash-db" 2>/dev/null || echo "[]")
+echo "$DASHBOARDS" | filter_by_prefix uid | while read -r uid; do
+    echo "  Deleting dashboard: $uid"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/dashboards/uid/${uid}" >/dev/null 2>&1 || true
+done
+
+# 3. Contact points
+CONTACT_POINTS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/contact-points" 2>/dev/null || echo "[]")
+echo "$CONTACT_POINTS" | filter_by_prefix uid | while read -r uid; do
+    echo "  Deleting contact point: $uid"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/contact-points/${uid}" >/dev/null 2>&1 || true
+done
+
+# 4. Mute timings
+MUTE_TIMINGS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/mute-timings" 2>/dev/null || echo "[]")
+echo "$MUTE_TIMINGS" | filter_by_prefix name | while read -r name; do
+    echo "  Deleting mute timing: $name"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/mute-timings/${name}" >/dev/null 2>&1 || true
+done
+
+# 5. Message templates
+TEMPLATES=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/templates" 2>/dev/null || echo "[]")
+echo "$TEMPLATES" | filter_by_prefix name | while read -r name; do
+    echo "  Deleting message template: $name"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/v1/provisioning/templates/${name}" >/dev/null 2>&1 || true
+done
+
+# 6. Service accounts
+SERVICE_ACCOUNTS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/serviceaccounts/search?perpage=1000" 2>/dev/null || echo '{"serviceAccounts":[]}')
+echo "$SERVICE_ACCOUNTS" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for sa in data.get('serviceAccounts', []):
+        name = sa.get('name', '')
+        if name.startswith('formae-test-') or name.startswith('formae-integ-test-'):
+            print(sa.get('id', ''))
+except:
+    pass
+" 2>/dev/null | while read -r id; do
+    echo "  Deleting service account: $id"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/serviceaccounts/${id}" >/dev/null 2>&1 || true
+done
+
+# 7. Teams
+TEAMS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/teams/search?perpage=1000" 2>/dev/null || echo '{"teams":[]}')
+echo "$TEAMS" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    for team in data.get('teams', []):
+        name = team.get('name', '')
+        if name.startswith('formae-test-') or name.startswith('formae-integ-test-'):
+            print(team.get('id', ''))
+except:
+    pass
+" 2>/dev/null | while read -r id; do
+    echo "  Deleting team: $id"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/teams/${id}" >/dev/null 2>&1 || true
+done
+
+# 8. Data sources
+DATASOURCES=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/datasources" 2>/dev/null || echo "[]")
+echo "$DATASOURCES" | filter_by_prefix uid | while read -r uid; do
+    echo "  Deleting data source: $uid"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/datasources/uid/${uid}" >/dev/null 2>&1 || true
+done
+
+# 9. Folders (delete last since dashboards and alert rules depend on them)
+FOLDERS=$(curl -s -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/folders" 2>/dev/null || echo "[]")
+echo "$FOLDERS" | filter_by_prefix uid | while read -r uid; do
+    echo "  Deleting folder: $uid"
+    curl -s -X DELETE -u "${GRAFANA_AUTH}" "${GRAFANA_URL}/api/folders/${uid}" >/dev/null 2>&1 || true
+done
+
+echo "clean-environment.sh: Cleanup complete"
