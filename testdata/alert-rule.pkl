@@ -1,0 +1,52 @@
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/core/folder.pkl"
+import "@grafana/core/datasource.pkl"
+import "@grafana/alerting/alert_rule.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  new folder.Folder {
+    label = "test-alertrule-folder"
+    uid = "formae-test-arfolder-\(testRunID)"
+    title = "Formae AlertRule Test Folder \(testRunID)"
+  }
+
+  new datasource.DataSource {
+    label = "test-alertrule-datasource"
+    uid = "formae-test-ards-\(testRunID)"
+    name = "Formae AlertRule Test DS \(testRunID)"
+    datasourceType = "prometheus"
+    url = "http://localhost:9090"
+    access = "proxy"
+  }
+
+  new alert_rule.AlertRule {
+    label = "test-alert-rule"
+    uid = "formae-test-\(testRunID)"
+    title = "Formae Test Alert Rule \(testRunID)"
+    folderUid = "formae-test-arfolder-\(testRunID)"
+    ruleGroup = "formae-test-group"
+    condition = "A"
+    pendingPeriod = "5m0s"
+    data = #"[{"refId":"A","datasourceUid":"formae-test-ards-\#(testRunID)","model":{"expr":"up == 0","refId":"A"},"relativeTimeRange":{"from":600,"to":0}}]"#
+    noDataState = "NoData"
+    execErrState = "Error"
+  }
+}

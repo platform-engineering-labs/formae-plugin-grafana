@@ -1,0 +1,50 @@
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/core/folder.pkl"
+import "@grafana/core/dashboard.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  new folder.Folder {
+    label = "test-dashboard-folder"
+    uid = "formae-test-dashfolder-\(testRunID)"
+    title = "Formae Dashboard Test Folder \(testRunID)"
+  }
+
+  new dashboard.Dashboard {
+    label = "test-dashboard"
+    uid = "formae-test-\(testRunID)"
+    title = "Formae Test Dashboard \(testRunID)"
+    folderUid = "formae-test-dashfolder-\(testRunID)"
+    configJson = #"""
+      {
+        "panels": [
+          {
+            "id": 1,
+            "type": "text",
+            "title": "Test Panel",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "options": {"content": "Hello from conformance test", "mode": "markdown"}
+          }
+        ],
+        "schemaVersion": 39
+      }
+      """#
+  }
+}

@@ -1,0 +1,44 @@
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/alerting/contact_point.pkl"
+import "@grafana/alerting/notification_policy.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  new contact_point.ContactPoint {
+    label = "test-np-contact-point"
+    uid = "formae-test-npcp-\(testRunID)"
+    name = "formae-test-np-receiver-\(testRunID)"
+    contactPointType = "email"
+    settings = #"""
+      {"addresses": "formae-test-np@example.com", "singleEmail": true}
+      """#
+  }
+
+  new notification_policy.NotificationPolicy {
+    label = "test-notification-policy"
+    receiver = "formae-test-np-receiver-\(testRunID)"
+    groupBy = #"""
+      ["alertname"]
+      """#
+    groupWait = "1m"
+    groupInterval = "5m"
+    repeatInterval = "4h"
+  }
+}

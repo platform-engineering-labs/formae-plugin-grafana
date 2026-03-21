@@ -1,0 +1,30 @@
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/alerting/mute_timing.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  new mute_timing.MuteTiming {
+    label = "test-mute-timing"
+    name = "formae-test-\(testRunID)"
+    timeIntervals = #"""
+      [{"weekdays": ["saturday", "sunday"], "months": ["1:3"]}]
+      """#
+  }
+}
