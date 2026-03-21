@@ -53,7 +53,7 @@ func (h *MuteTimingHandler) Create(ctx context.Context, client *goapi.GrafanaHTT
 	intervalsJSON, _ := json.Marshal(created.TimeIntervals)
 	out := muteTimingProps{
 		Name:          created.Name,
-		TimeIntervals: string(intervalsJSON),
+		TimeIntervals: string(stripNulls(intervalsJSON)),
 	}
 	outJSON, _ := json.Marshal(out)
 	return SuccessResult(resource.OperationCreate, created.Name, outJSON), nil
@@ -79,7 +79,7 @@ func (h *MuteTimingHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPA
 	intervalsJSON, _ := json.Marshal(mt.TimeIntervals)
 	out := muteTimingProps{
 		Name:          mt.Name,
-		TimeIntervals: string(intervalsJSON),
+		TimeIntervals: string(stripNulls(intervalsJSON)),
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
@@ -119,7 +119,7 @@ func (h *MuteTimingHandler) Update(ctx context.Context, client *goapi.GrafanaHTT
 	intervalsJSON, _ := json.Marshal(updated.TimeIntervals)
 	out := muteTimingProps{
 		Name:          updated.Name,
-		TimeIntervals: string(intervalsJSON),
+		TimeIntervals: string(stripNulls(intervalsJSON)),
 	}
 	outJSON, _ := json.Marshal(out)
 	return SuccessResult(resource.OperationUpdate, updated.Name, outJSON), nil
