@@ -21,18 +21,17 @@ forma {
     }
   }
 
-  local testFolder = new folder.Folder {
+  new folder.Folder {
     label = "test-dashboard-folder"
     uid = "formae-test-dashfolder-\(testRunID)"
     title = "Formae Dashboard Test Folder \(testRunID)"
   }
-  testFolder
 
   new dashboard.Dashboard {
     label = "test-dashboard"
     uid = "formae-test-\(testRunID)"
     title = "Formae Test Dashboard \(testRunID) - Updated"
-    folderUid = testFolder.res.uid
+    folderUid = "formae-test-dashfolder-\(testRunID)"
     configJson = #"{"panels":[{"gridPos":{"h":8,"w":12,"x":0,"y":0},"id":1,"options":{"content":"Hello from conformance test","mode":"markdown"},"title":"Test Panel","type":"text"}],"schemaVersion":39}"#
   }
 }

@@ -22,14 +22,13 @@ forma {
     }
   }
 
-  local testFolder = new folder.Folder {
+  new folder.Folder {
     label = "test-alertrule-folder"
     uid = "formae-test-arfolder-\(testRunID)"
     title = "Formae AlertRule Test Folder \(testRunID)"
   }
-  testFolder
 
-  local testDS = new datasource.DataSource {
+  new datasource.DataSource {
     label = "test-alertrule-datasource"
     uid = "formae-test-ards-\(testRunID)"
     name = "Formae AlertRule Test DS \(testRunID)"
@@ -37,13 +36,12 @@ forma {
     url = "http://localhost:9090"
     access = "proxy"
   }
-  testDS
 
   new alert_rule.AlertRule {
     label = "test-alert-rule"
     uid = "formae-test-\(testRunID)"
     title = "Formae Test Alert Rule \(testRunID)"
-    folderUid = testFolder.res.uid
+    folderUid = "formae-test-arfolder-\(testRunID)"
     ruleGroup = "formae-test-group"
     condition = "A"
     pendingPeriod = "5m0s"
