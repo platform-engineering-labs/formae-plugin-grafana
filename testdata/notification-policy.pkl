@@ -26,17 +26,13 @@ forma {
     uid = "formae-test-npcp-\(testRunID)"
     name = "formae-test-np-receiver-\(testRunID)"
     contactPointType = "email"
-    settings = #"""
-      {"addresses": "formae-test-np@example.com", "singleEmail": true}
-      """#
+    settings = #"{"addresses":"formae-test-np@example.com","singleEmail":true}"#
   }
 
   new notification_policy.NotificationPolicy {
     label = "test-notification-policy"
     receiver = "formae-test-np-receiver-\(testRunID)"
-    groupBy = #"""
-      ["alertname"]
-      """#
+    groupBy = #"["alertname"]"#
     groupWait = "30s"
     groupInterval = "5m"
     repeatInterval = "4h"

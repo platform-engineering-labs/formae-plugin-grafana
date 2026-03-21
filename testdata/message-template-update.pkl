@@ -23,8 +23,6 @@ forma {
   new message_template.MessageTemplate {
     label = "test-message-template"
     name = "formae-test-\(testRunID)"
-    template = #"""
-      {{ define "formae-test" }}Formae UPDATED alert: {{ .CommonLabels.alertname }} - {{ .Status }}{{ end }}
-      """#
+    template = #"{{ define "formae-test" }}Formae UPDATED alert: {{ .CommonLabels.alertname }} - {{ .Status }}{{ end }}"#
   }
 }

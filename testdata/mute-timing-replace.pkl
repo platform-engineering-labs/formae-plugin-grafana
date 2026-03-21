@@ -23,8 +23,6 @@ forma {
   new mute_timing.MuteTiming {
     label = "test-mute-timing"
     name = "formae-test-\(testRunID)-replaced"
-    timeIntervals = #"""
-      [{"weekdays": ["saturday", "sunday"]}]
-      """#
+    timeIntervals = #"[{"weekdays":["saturday","sunday"]}]"#
   }
 }

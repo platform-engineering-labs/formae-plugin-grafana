@@ -25,8 +25,6 @@ forma {
     uid = "formae-test-\(testRunID)"
     name = "Formae Test ContactPoint \(testRunID)"
     contactPointType = "email"
-    settings = #"""
-      {"addresses": "formae-test-updated@example.com", "singleEmail": false}
-      """#
+    settings = #"{"addresses":"formae-test-updated@example.com","singleEmail":false}"#
   }
 }
