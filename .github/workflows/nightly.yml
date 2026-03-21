@@ -129,6 +129,7 @@ jobs:
     needs: [conformance-tests, post-cleanup]
     runs-on: ubuntu-latest
     if: success()
+    continue-on-error: true
     steps:
       - name: Check if previous run failed
         id: check_previous
@@ -183,6 +184,7 @@ jobs:
     needs: [conformance-tests, post-cleanup]
     runs-on: ubuntu-latest
     if: failure()
+    continue-on-error: true
     steps:
       - name: Notify Slack
         uses: slackapi/slack-github-action@v2.1.1
