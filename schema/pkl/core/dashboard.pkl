@@ -3,6 +3,17 @@ module core.dashboard
 
 import "@formae/formae.pkl"
 
+const type = "Grafana::Core::Dashboard"
+
+/// Resolvable reference to a Dashboard.
+open class DashboardResolvable extends formae.Resolvable {
+  hidden type = module.type
+
+  hidden uid: DashboardResolvable = (this) {
+    property = "uid"
+  }
+}
+
 /// A Grafana dashboard.
 /// The dashboard body is provided as a JSON string containing panels,
 /// variables, and other dashboard configuration.
@@ -24,7 +35,7 @@ class Dashboard extends formae.Resource {
 
   /// UID of the folder containing this dashboard.
   @formae.FieldHint {}
-  folderUid: String?
+  folderUid: (String|formae.Resolvable)?
 
   /// The complete dashboard model as a JSON string.
   /// This contains panels, variables, templating, annotations, etc.
@@ -34,14 +45,11 @@ class Dashboard extends formae.Resource {
   /// Commit message for the dashboard version history.
   @formae.FieldHint {}
   message: String?
-}
 
-/// Resolvable reference to a Dashboard.
-class DashboardResolvable extends formae.Resolvable {
-  res: DashboardRef
-}
+  local parent = this
 
-class DashboardRef {
-  uid: String
-  url: String
+  hidden res: DashboardResolvable = new {
+    label = parent.label
+    stack = parent.stack?.label
+  }
 }
