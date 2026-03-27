@@ -42,12 +42,6 @@ local lgtmStack = new compose.Stack {
           retries: 30
           start_period: 10s
     """#
-  endpoints = new Mapping {
-    ["grafana"] = "lgtm:3000"
-    ["otlp-grpc"] = "lgtm:4317"
-    ["otlp-http"] = "lgtm:4318"
-    ["prometheus"] = "lgtm:9090"
-  }
 }
 
 forma {
@@ -70,7 +64,7 @@ forma {
     config = new Mapping {
       ["Type"] = "Grafana"
       ["Endpoints"] = lgtmStack.res.endpoints
-      ["EndpointKey"] = "grafana"
+      ["EndpointKey"] = "lgtm:3000"
     }
   }
   grafanaTarget
@@ -79,12 +73,13 @@ forma {
   lgtmStack
 
   // Dashboards folder
-  new folder.Folder {
+  local dashboardsFolder = new folder.Folder {
     label = "formae-dashboards"
     target = grafanaTarget.res
     uid = "formae-dashboards"
     title = "Formae Dashboards"
   }
+  dashboardsFolder
 
   // Formae Agent dashboard
   new dashboard.Dashboard {
@@ -92,7 +87,7 @@ forma {
     target = grafanaTarget.res
     uid = "formae-overview"
     title = "Formae Agent"
-    folderUid = "formae-dashboards"
+    folderUid = dashboardsFolder.res.uid
     configJson = overviewJson
   }
 
@@ -102,7 +97,7 @@ forma {
     target = grafanaTarget.res
     uid = "formae-plugins"
     title = "Formae Plugins"
-    folderUid = "formae-dashboards"
+    folderUid = dashboardsFolder.res.uid
     configJson = pluginsJson
   }
 }
