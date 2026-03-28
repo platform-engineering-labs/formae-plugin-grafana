@@ -3,6 +3,17 @@ module core.folder
 
 import "@formae/formae.pkl"
 
+const type = "Grafana::Core::Folder"
+
+/// Resolvable reference to a Folder.
+open class FolderResolvable extends formae.Resolvable {
+  hidden type = module.type
+
+  hidden uid: FolderResolvable = (this) {
+    property = "uid"
+  }
+}
+
 /// A folder for organizing dashboards and alert rules.
 @formae.ResourceHint {
   type = "Grafana::Core::Folder"
@@ -23,14 +34,12 @@ class Folder extends formae.Resource {
   /// UID of the parent folder for nested folder hierarchies.
   /// Omit for top-level folders.
   @formae.FieldHint {}
-  parentUid: String?
-}
+  parentUid: (String|formae.Resolvable)?
 
-/// Resolvable reference to a Folder.
-class FolderResolvable extends formae.Resolvable {
-  res: FolderRef
-}
+  local parent = this
 
-class FolderRef {
-  uid: String
+  hidden res: FolderResolvable = new {
+    label = parent.label
+    stack = parent.stack?.label
+  }
 }

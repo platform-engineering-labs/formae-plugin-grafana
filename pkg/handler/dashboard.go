@@ -56,7 +56,7 @@ func (h *DashboardHandler) Create(ctx context.Context, client *goapi.GrafanaHTTP
 	cmd := &models.SaveDashboardCommand{
 		Dashboard: dashboard,
 		FolderUID: p.FolderUID,
-		Overwrite: false,
+		Overwrite: true, // Upsert: create or update if already exists
 		Message:   p.Message,
 	}
 

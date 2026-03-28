@@ -66,6 +66,12 @@ install: build
 	@cp bin/$(BINARY) $(INSTALL_DIR)/$(BINARY)
 	@cp -r schema/pkl/* $(INSTALL_DIR)/schema/pkl/
 	@cp formae-plugin.pkl $(INSTALL_DIR)/
+	@# Resolve FORMAE_PLUGINS_DIR placeholder in example PklProject files
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		find examples -name PklProject -exec sed -i '' 's|FORMAE_PLUGINS_DIR|$(PLUGIN_BASE_DIR)|g' {} +; \
+	else \
+		find examples -name PklProject -exec sed -i 's|FORMAE_PLUGINS_DIR|$(PLUGIN_BASE_DIR)|g' {} +; \
+	fi
 	@echo "Installed to $(INSTALL_DIR)"
 	@echo "  - Binary: $(INSTALL_DIR)/$(BINARY)"
 	@echo "  - Schema: $(INSTALL_DIR)/schema/pkl/"

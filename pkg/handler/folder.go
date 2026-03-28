@@ -41,13 +41,12 @@ func (h *FolderHandler) Create(ctx context.Context, client *goapi.GrafanaHTTPAPI
 
 	resp, err := client.Folders.CreateFolder(cmd)
 	if err != nil {
-		code := MapAPIError(err)
-		// Grafana returns 412 (Precondition Failed) when a folder with the same UID
-		// already exists. Map this to AlreadyExists for proper handling.
+		// Grafana returns 412 when a folder with the same UID already exists.
+		// Fall through to an update instead of failing.
 		if strings.Contains(err.Error(), "412") || strings.Contains(err.Error(), "precondition") {
-			code = resource.OperationErrorCodeAlreadyExists
+			return h.Update(ctx, client, p.UID, props, props)
 		}
-		return FailResult(resource.OperationCreate, code, fmt.Sprintf("failed to create folder: %v", err)), nil
+		return FailResult(resource.OperationCreate, MapAPIError(err), fmt.Sprintf("failed to create folder: %v", err)), nil
 	}
 
 	folder := resp.GetPayload()
