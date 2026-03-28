@@ -3,7 +3,7 @@ version = "0.1.0"
 namespace = "GRAFANA"
 description = "Grafana instance management plugin for formae"
 license = "Apache-2.0"
-minFormaeVersion = "0.80.1"
+minFormaeVersion = "0.83.0"
 
 output {
   renderer = new JsonRenderer {}
