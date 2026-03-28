@@ -4,9 +4,15 @@ Manage Grafana instance resources declaratively — dashboards, data sources, fo
 
 ## Installation
 
+Requires Go 1.25+ and [Pkl CLI](https://pkl-lang.org/main/current/pkl-cli/index.html).
+
 ```bash
+git clone https://github.com/platform-engineering-labs/formae-plugin-grafana.git
+cd formae-plugin-grafana
 make install
 ```
+
+This builds the plugin binary and installs it to `~/.pel/formae/plugins/grafana/`. The formae agent discovers installed plugins automatically on startup.
 
 ## Supported Resources
 
