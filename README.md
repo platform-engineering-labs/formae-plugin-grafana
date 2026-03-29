@@ -116,4 +116,4 @@ The test infrastructure uses `docker-compose.test.yml` to spin up a Grafana OSS 
 
 ## Licensing
 
-Licensed under Apache-2.0. See [LICENSE](LICENSE).
+Licensed under FSL-1.1-ALv2. See [LICENSE](LICENSE).
