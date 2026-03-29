@@ -1,7 +1,9 @@
 amends "pkl:Project"
 
 dependencies {
-  ["grafana"] = import("../../schema/pkl/PklProject")
+  ["grafana"] {
+    uri = "package://hub.platform.engineering/plugins/grafana/schema/pkl/grafana/grafana@0.1.0"
+  }
 
   ["formae"] {
     uri = "package://hub.platform.engineering/plugins/pkl/schema/pkl/formae/formae@0.83.0"
