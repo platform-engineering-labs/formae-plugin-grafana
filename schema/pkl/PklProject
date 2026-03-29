@@ -2,9 +2,9 @@ amends "pkl:Project"
 
 package {
   name = "grafana"
-  baseUri = "package://hub.platform.engineering/plugins/pkl/schema/pkl/grafana"
+  baseUri = "package://hub.platform.engineering/plugins/grafana/schema/pkl/\(name)/\(name)"
   version = "0.1.0"
-  packageZipUrl = "https://hub.platform.engineering/plugins/pkl/schema/pkl/grafana@\(version).zip"
+  packageZipUrl = "https://hub.platform.engineering/plugins/grafana/schema/pkl/\(name)/\(name)@\(version).zip"
 }
 
 dependencies {
