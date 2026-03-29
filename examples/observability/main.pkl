@@ -1,15 +1,3 @@
-/// Formae observability stack: LGTM + Grafana dashboards.
-///
-/// Deploys a Grafana LGTM stack via Docker Compose and provisions
-/// Grafana dashboards using a target resolvable. The Compose plugin
-/// exposes the Grafana endpoint, which is resolved into the Grafana
-/// target config automatically.
-///
-/// Requirements:
-///   - formae >= 0.83.0
-///   - formae-plugin-grafana
-///   - formae-plugin-compose
-///   - Docker with Compose plugin
 amends "@formae/forma.pkl"
 
 import "@formae/formae.pkl"
@@ -17,6 +5,37 @@ import "@compose/compose.pkl"
 import "@grafana/grafana.pkl"
 import "@grafana/core/folder.pkl"
 import "@grafana/core/dashboard.pkl"
+
+description {
+  text = """
+    Formae Observability Stack
+    ==========================
+
+    Deploys a Grafana LGTM (Loki, Grafana, Tempo, Mimir) stack via Docker Compose
+    and provisions dashboards to monitor your formae agent and plugins.
+
+    What gets deployed:
+      - Docker Compose stack with Grafana LGTM all-in-one image
+      - Grafana folder "Formae Dashboards"
+      - Formae Agent dashboard (command throughput, resource states, errors)
+      - Formae Plugins dashboard (plugin latency, operations, error rates)
+
+    Prerequisites:
+      - Docker with Compose v2 plugin
+      - GRAFANA_AUTH=admin:admin set before starting the agent
+
+    After apply, open http://localhost:3000 (admin/admin) to view dashboards.
+
+    Note: If the agent was already running before this stack was deployed,
+    restart it so the OpenTelemetry exporter can connect to the collector:
+
+      formae agent stop
+      GRAFANA_AUTH=admin:admin formae agent start
+
+    To destroy: formae destroy --yes main.pkl
+    """
+  confirm = true
+}
 
 local dashboardRepo = "https://raw.githubusercontent.com/platform-engineering-labs/formae-grafana-dashboards/main/dashboards"
 local overviewJson = read("\(dashboardRepo)/formae-overview.json").text
