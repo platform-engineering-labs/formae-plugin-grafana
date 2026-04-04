@@ -123,20 +123,12 @@ jobs:
       - name: Run integration tests
         run: make test-integration
 
-  # Conformance tests run against real cloud resources.
-  # This job is disabled by default - enable it after configuring credentials.
-  #
-  # To enable:
-  # 1. Configure credentials for your cloud provider (see below)
-  # 2. Implement scripts/ci/setup-credentials.sh for local credential verification
-  # 3. Implement scripts/ci/clean-environment.sh for test resource cleanup
-  # 4. Change the 'if' condition to enable the job
+  # Conformance tests run against a local Grafana instance via Docker Compose.
+  # Runs on push to main and manual trigger with run_conformance=true.
   conformance-tests:
     needs: [build, lint, pkl-validate, verify-schema]
     runs-on: ubuntu-latest
-    # Disabled by default - change condition after configuring credentials:
-    # if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.inputs.run_conformance == 'true'
-    if: ${{ github.event.inputs.run_conformance == 'true' }}
+    if: github.event_name == 'push' || github.event.inputs.run_conformance == 'true'
     timeout-minutes: 60
     env:
       GRAFANA_URL: http://localhost:3333
