@@ -3,7 +3,7 @@ amends "pkl:Project"
 package {
   name = "grafana"
   baseUri = "package://hub.platform.engineering/plugins/grafana/schema/pkl/\(name)/\(name)"
-  version = "0.1.0"
+  version = read("VERSION").text.trim()
   packageZipUrl = "https://hub.platform.engineering/plugins/grafana/schema/pkl/\(name)/\(name)@\(version).zip"
 }
 
