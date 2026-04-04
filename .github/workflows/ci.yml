@@ -92,13 +92,12 @@ jobs:
       - name: Verify schema
         run: make verify-schema
 
-  # Integration tests run against real infrastructure.
-  # This job is disabled by default - enable it after configuring credentials.
   integration-tests:
     needs: [build, lint]
     runs-on: ubuntu-latest
-    # Disabled by default - remove this condition after configuring credentials
-    if: false
+    env:
+      GRAFANA_URL: http://localhost:3333
+      GRAFANA_AUTH: admin:admin
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,13 +112,12 @@ jobs:
         with:
           pkl-version: 0.30.0
 
-      # Configure credentials for your infrastructure here
-      # Example:
-      # env:
-      #   MY_API_KEY: ${{ secrets.MY_API_KEY }}
-
       - name: Run integration tests
         run: make test-integration
+
+      - name: Stop Grafana test instance
+        if: always()
+        run: make test-env-down
 
   # Discover test cases for the conformance matrix.
   discover-conformance-tests:
