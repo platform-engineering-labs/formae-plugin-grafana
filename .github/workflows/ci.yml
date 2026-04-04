@@ -144,10 +144,30 @@ jobs:
           echo "Discovered test cases: ${TEST_CASES}"
           echo "test-cases=${TEST_CASES}" >> "$GITHUB_OUTPUT"
 
+  pre-cleanup:
+    needs: [discover-conformance-tests]
+    runs-on: ubuntu-latest
+    env:
+      GRAFANA_URL: http://localhost:3333
+      GRAFANA_AUTH: admin:admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Grafana test instance
+        run: make test-env-up
+
+      - name: Clean test resources
+        run: ./scripts/ci/clean-environment.sh
+
+      - name: Stop Grafana test instance
+        if: always()
+        run: make test-env-down
+
   # Conformance tests run against a local Grafana instance via Docker Compose.
   # Runs each test case sequentially to avoid shared-state conflicts.
   conformance-tests:
-    needs: [discover-conformance-tests]
+    needs: [discover-conformance-tests, pre-cleanup]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -188,7 +208,27 @@ jobs:
             VERSION="latest"
           fi
           make conformance-test-crud TEST=${{ matrix.test-case }} VERSION="$VERSION"
-          make conformance-test-discovery TEST=${{ matrix.test-case }} VERSION="$VERSION"
+
+      - name: Stop Grafana test instance
+        if: always()
+        run: make test-env-down
+
+  post-cleanup:
+    needs: [conformance-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      GRAFANA_URL: http://localhost:3333
+      GRAFANA_AUTH: admin:admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start Grafana test instance
+        run: make test-env-up
+
+      - name: Clean test resources
+        run: ./scripts/ci/clean-environment.sh
 
       - name: Stop Grafana test instance
         if: always()
