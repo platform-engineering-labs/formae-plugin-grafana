@@ -47,7 +47,8 @@ class DataSource extends formae.Resource {
 
   /// Type-specific configuration as a JSON string.
   /// The structure depends on the data source type.
-  @formae.FieldHint {}
+  /// Grafana populates this with defaults when not specified.
+  @formae.FieldHint { hasProviderDefault = true }
   jsonData: String?
 
   /// Sensitive configuration as a JSON string (e.g., passwords, tokens).
