@@ -22,11 +22,12 @@ forma {
     }
   }
 
-  new folder.Folder {
+  local testFolder = new folder.Folder {
     label = "test-alertrule-folder"
     uid = "formae-test-arfolder-\(testRunID)"
     title = "Formae AlertRule Test Folder \(testRunID)"
   }
+  testFolder
 
   new datasource.DataSource {
     label = "test-alertrule-datasource"
@@ -41,7 +42,7 @@ forma {
     label = "test-alert-rule"
     uid = "formae-test-\(testRunID)"
     title = "Formae Test Alert Rule \(testRunID)"
-    folderUid = "formae-test-arfolder-\(testRunID)"
+    folderUid = testFolder.res.uid
     ruleGroup = "formae-test-group"
     condition = "A"
     pendingPeriod = "5m0s"

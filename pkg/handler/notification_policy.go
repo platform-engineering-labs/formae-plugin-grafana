@@ -106,6 +106,16 @@ func (h *NotificationPolicyHandler) Read(ctx context.Context, client *goapi.Graf
 
 	route := resp.GetPayload()
 	out := routeToProps(route)
+
+	// If the receiver doesn't match, the policy was deleted (Grafana reverts
+	// to the default receiver). Report as not found so sync can tombstone it.
+	if out.Receiver != nativeID {
+		return &resource.ReadResult{
+			ResourceType: "Grafana::Alerting::NotificationPolicy",
+			ErrorCode:    resource.OperationErrorCodeNotFound,
+		}, nil
+	}
+
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
 		ResourceType: "Grafana::Alerting::NotificationPolicy",

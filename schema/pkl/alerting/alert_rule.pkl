@@ -22,7 +22,7 @@ class AlertRule extends formae.Resource {
 
   /// UID of the folder containing this rule.
   @formae.FieldHint {}
-  folderUid: String
+  folderUid: (String|formae.Resolvable)
 
   /// Name of the rule group this rule belongs to.
   @formae.FieldHint {}

@@ -21,11 +21,12 @@ forma {
     }
   }
 
-  new folder.Folder {
+  local platformFolder = new folder.Folder {
     label = "platform-dashboards"
     uid = "platform-dashboards"
     title = "Platform Dashboards"
   }
+  platformFolder
 
   new datasource.DataSource {
     label = "prometheus"
@@ -42,7 +43,7 @@ forma {
     label = "overview"
     uid = "platform-overview"
     title = "Platform Overview"
-    folderUid = "platform-dashboards"
+    folderUid = platformFolder.res.uid
     configJson = #"""
       {
         "panels": [
