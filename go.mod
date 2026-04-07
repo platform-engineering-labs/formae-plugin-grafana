@@ -6,8 +6,8 @@ require (
 	github.com/go-openapi/runtime v0.28.0
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/grafana/grafana-openapi-client-go v0.0.0-20251202103709-7ef691d4df1d
-	github.com/platform-engineering-labs/formae/pkg/plugin v0.1.21-0.20260407134926-6e0e901477de
-	github.com/platform-engineering-labs/formae/pkg/plugin-conformance-tests v0.1.42-0.20260407034831-dd28eded829a
+	github.com/platform-engineering-labs/formae/pkg/plugin v0.1.22
+	github.com/platform-engineering-labs/formae/pkg/plugin-conformance-tests v0.1.42
 	github.com/stretchr/testify v1.11.1
 )
 
