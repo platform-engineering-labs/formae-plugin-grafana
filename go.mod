@@ -6,6 +6,7 @@ require (
 	github.com/go-openapi/runtime v0.28.0
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/grafana/grafana-openapi-client-go v0.0.0-20251202103709-7ef691d4df1d
+	github.com/platform-engineering-labs/formae/pkg/model v0.1.6
 	github.com/platform-engineering-labs/formae/pkg/plugin v0.1.22
 	github.com/platform-engineering-labs/formae/pkg/plugin-conformance-tests v0.1.42
 	github.com/stretchr/testify v1.11.1
@@ -53,7 +54,6 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/platform-engineering-labs/formae/pkg/api/model v0.1.1 // indirect
-	github.com/platform-engineering-labs/formae/pkg/model v0.1.7-0.20260407034831-dd28eded829a // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.1 // indirect
