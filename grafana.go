@@ -55,7 +55,8 @@ func (p *Plugin) getClient(targetConfig json.RawMessage) (*goapi.GrafanaHTTPAPI,
 // Grafana Cloud has rate limits; self-hosted may not, but we set a reasonable default.
 func (p *Plugin) RateLimit() model.RateLimitConfig {
 	return model.RateLimitConfig{
-		MaxRequestsPerSecond: 10,
+		Scope:                            model.RateLimitScopeNamespace,
+		MaxRequestsPerSecondForNamespace: 10,
 	}
 }
 
