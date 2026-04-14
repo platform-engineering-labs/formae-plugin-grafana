@@ -76,14 +76,12 @@ forma {
     config = new compose.Config {}
   }
 
-  // Grafana target — resolved from compose stack endpoints
+  // Grafana target — URL resolved from compose stack endpoint
   local grafanaTarget = new formae.Target {
     label = "grafana"
     namespace = "GRAFANA"
-    config = new Mapping {
-      ["Type"] = "Grafana"
-      ["Endpoints"] = lgtmStack.res.endpoints
-      ["EndpointKey"] = "lgtm:3000"
+    config = new grafana.Config {
+      url = lgtmStack.res.endpoints.at("lgtm:3000")
     }
   }
   grafanaTarget
