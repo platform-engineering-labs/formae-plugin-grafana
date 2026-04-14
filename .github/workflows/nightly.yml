@@ -24,7 +24,7 @@ jobs:
       test-cases: ${{ steps.discover.outputs.test-cases }}
     steps:
       - name: Checkout plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Discover test cases
         id: discover
@@ -46,7 +46,7 @@ jobs:
       GRAFANA_AUTH: admin:admin
     steps:
       - name: Checkout plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Start Grafana test instance
         run: make test-env-up
@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - name: Checkout plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -151,7 +151,7 @@ jobs:
       GRAFANA_AUTH: admin:admin
     steps:
       - name: Checkout plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Start Grafana test instance
         run: make test-env-up
