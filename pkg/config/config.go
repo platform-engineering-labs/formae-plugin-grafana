@@ -18,15 +18,19 @@ import (
 // TargetConfig holds Grafana target settings from the forma file.
 // Contains only the deployment location, NOT credentials.
 //
-// Supports two modes:
-//   - Direct: Url is set directly (e.g., "http://localhost:3000")
-//   - Resolved: Endpoints mapping + EndpointKey from a compose stack resolvable
+// The Url field receives the resolved value from the formae engine. When the
+// PKL config uses a resolvable (e.g., lgtmStack.res.endpoints.at("lgtm:3000")),
+// formae resolves it to a plain URL string before passing it to the plugin.
+//
+// Deprecated: Endpoints and EndpointKey are superseded by collection resolvables
+// (MappingResolvable.at()). Use url = stack.res.endpoints.at("key") instead.
+// These fields will be removed in a future release.
 type TargetConfig struct {
 	Type        string            `json:"Type"`
 	URL         string            `json:"Url,omitempty"`
 	OrgID       *int64            `json:"OrgId,omitempty"`
-	Endpoints   map[string]string `json:"Endpoints,omitempty"`
-	EndpointKey string            `json:"EndpointKey,omitempty"`
+	Endpoints   map[string]string `json:"Endpoints,omitempty"`   // Deprecated: use resolvable url instead
+	EndpointKey string            `json:"EndpointKey,omitempty"` // Deprecated: use resolvable url instead
 }
 
 // ParseTargetConfig deserializes target configuration from JSON.

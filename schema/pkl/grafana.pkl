@@ -8,16 +8,22 @@ import "@formae/formae.pkl"
 /// Contains only the deployment location, NOT credentials.
 /// Authentication is provided via environment variables:
 ///   GRAFANA_AUTH - Service account token, API key, or "user:password" for basic auth
+///
+/// The url can be a literal string or a resolvable reference to another resource's
+/// property (e.g., an ALB Listener URL or a Compose stack endpoint):
+///   url = "https://grafana.example.com"                       // literal
+///   url = lgtmStack.res.endpoints.at("lgtm:3000")             // compose endpoint
+///   url = httpsListener.res.url                                // ALB listener
 open class Config {
   hidden fixed type: String = "Grafana"
 
-  /// The URL of the Grafana instance (e.g., "https://grafana.example.com").
-  hidden url: String
+  /// The URL of the Grafana instance. Accepts a literal string or a resolvable.
+  hidden url: String|formae.Resolvable
 
   /// Optional organization ID. Defaults to the org associated with the auth token.
   hidden orgId: Int?
 
   fixed Type: String = type
-  fixed Url: String = url
+  fixed Url: String|formae.Resolvable = url
   fixed OrgId: Int? = orgId
 }
