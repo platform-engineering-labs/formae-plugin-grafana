@@ -4,6 +4,6 @@ dependencies {
   ["grafana"] = import("../schema/pkl/PklProject")
 
   ["formae"] {
-    uri = "package://hub.platform.engineering/plugins/pkl/schema/pkl/formae/formae@0.83.1"
+    uri = "package://hub.platform.engineering/plugins/pkl/schema/pkl/formae/formae@0.84.0"
   }
 }
