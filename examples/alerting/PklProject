@@ -2,7 +2,7 @@ amends "pkl:Project"
 
 dependencies {
   ["grafana"] {
-    uri = "package://hub.platform.engineering/plugins/grafana/schema/pkl/grafana/grafana@0.1.0"
+    uri = "package://hub.platform.engineering/plugins/grafana/schema/pkl/grafana/grafana@0.1.2"
   }
 
   ["formae"] {
