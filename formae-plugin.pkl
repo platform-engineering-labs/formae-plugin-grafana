@@ -1,7 +1,9 @@
 name = "grafana"
 version = "0.1.2"
 namespace = "GRAFANA"
+summary = "Grafana resource plugin"
 description = "Grafana instance management plugin for formae"
+category = "observability"
 license = "FSL-1.1-ALv2"
 minFormaeVersion = "0.84.0"
 
