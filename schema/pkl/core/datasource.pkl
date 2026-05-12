@@ -5,11 +5,11 @@ import "@formae/formae.pkl"
 
 /// A Grafana data source connection (Prometheus, Loki, InfluxDB, etc.).
 @formae.ResourceHint {
-  type = "Grafana::Core::DataSource"
+  type = "GRAFANA::Core::DataSource"
   identifier = "$.uid"
 }
 class DataSource extends formae.Resource {
-  fixed hidden type: String = "Grafana::Core::DataSource"
+  fixed hidden type: String = "GRAFANA::Core::DataSource"
 
   /// Unique identifier. Auto-generated if not specified.
   /// Cannot be changed after creation.

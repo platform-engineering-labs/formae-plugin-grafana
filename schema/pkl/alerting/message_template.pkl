@@ -6,11 +6,11 @@ import "@formae/formae.pkl"
 /// A Grafana notification message template.
 /// Templates use Go's text/template syntax to customize alert notification content.
 @formae.ResourceHint {
-  type = "Grafana::Alerting::MessageTemplate"
+  type = "GRAFANA::Alerting::MessageTemplate"
   identifier = "$.name"
 }
 class MessageTemplate extends formae.Resource {
-  fixed hidden type: String = "Grafana::Alerting::MessageTemplate"
+  fixed hidden type: String = "GRAFANA::Alerting::MessageTemplate"
 
   /// Name of the template group. Used as the identifier.
   /// Cannot be changed after creation.

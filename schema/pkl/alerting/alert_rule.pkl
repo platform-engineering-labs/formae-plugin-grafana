@@ -6,11 +6,11 @@ import "@formae/formae.pkl"
 /// An individual Grafana alert rule.
 /// Alert rules evaluate queries and fire alerts when conditions are met.
 @formae.ResourceHint {
-  type = "Grafana::Alerting::AlertRule"
+  type = "GRAFANA::Alerting::AlertRule"
   identifier = "$.uid"
 }
 class AlertRule extends formae.Resource {
-  fixed hidden type: String = "Grafana::Alerting::AlertRule"
+  fixed hidden type: String = "GRAFANA::Alerting::AlertRule"
 
   /// Unique identifier. Auto-generated if not specified.
   @formae.FieldHint { createOnly = true }

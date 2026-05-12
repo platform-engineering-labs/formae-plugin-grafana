@@ -3,7 +3,7 @@ module core.dashboard
 
 import "@formae/formae.pkl"
 
-const type = "Grafana::Core::Dashboard"
+const type = "GRAFANA::Core::Dashboard"
 
 /// Resolvable reference to a Dashboard.
 open class DashboardResolvable extends formae.Resolvable {
@@ -18,11 +18,11 @@ open class DashboardResolvable extends formae.Resolvable {
 /// The dashboard body is provided as a JSON string containing panels,
 /// variables, and other dashboard configuration.
 @formae.ResourceHint {
-  type = "Grafana::Core::Dashboard"
+  type = "GRAFANA::Core::Dashboard"
   identifier = "$.uid"
 }
 class Dashboard extends formae.Resource {
-  fixed hidden type: String = "Grafana::Core::Dashboard"
+  fixed hidden type: String = "GRAFANA::Core::Dashboard"
 
   /// Unique identifier. Auto-generated if not specified.
   /// Cannot be changed after creation.

@@ -7,11 +7,11 @@ import "@formae/formae.pkl"
 /// This is a singleton resource per organization — there is exactly one
 /// notification policy that routes alerts to contact points.
 @formae.ResourceHint {
-  type = "Grafana::Alerting::NotificationPolicy"
+  type = "GRAFANA::Alerting::NotificationPolicy"
   identifier = "$.receiver"
 }
 class NotificationPolicy extends formae.Resource {
-  fixed hidden type: String = "Grafana::Alerting::NotificationPolicy"
+  fixed hidden type: String = "GRAFANA::Alerting::NotificationPolicy"
 
   /// Name of the default contact point (receiver).
   @formae.FieldHint {}

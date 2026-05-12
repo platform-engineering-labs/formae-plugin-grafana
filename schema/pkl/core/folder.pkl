@@ -3,7 +3,7 @@ module core.folder
 
 import "@formae/formae.pkl"
 
-const type = "Grafana::Core::Folder"
+const type = "GRAFANA::Core::Folder"
 
 /// Resolvable reference to a Folder.
 open class FolderResolvable extends formae.Resolvable {
@@ -16,11 +16,11 @@ open class FolderResolvable extends formae.Resolvable {
 
 /// A folder for organizing dashboards and alert rules.
 @formae.ResourceHint {
-  type = "Grafana::Core::Folder"
+  type = "GRAFANA::Core::Folder"
   identifier = "$.uid"
 }
 class Folder extends formae.Resource {
-  fixed hidden type: String = "Grafana::Core::Folder"
+  fixed hidden type: String = "GRAFANA::Core::Folder"
 
   /// Unique identifier. Auto-generated if not specified.
   /// Cannot be changed after creation.
