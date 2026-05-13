@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Core::ServiceAccount", &ServiceAccountHandler{})
+	Register("GRAFANA::Core::ServiceAccount", &ServiceAccountHandler{})
 }
 
 // ServiceAccountHandler implements CRUD+List for Grafana service accounts.
@@ -60,7 +60,7 @@ func (h *ServiceAccountHandler) Read(ctx context.Context, client *goapi.GrafanaH
 	id, err := strconv.ParseInt(nativeID, 10, 64)
 	if err != nil {
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::ServiceAccount",
+			ResourceType: "GRAFANA::Core::ServiceAccount",
 			ErrorCode:    resource.OperationErrorCodeInvalidRequest,
 		}, nil
 	}
@@ -70,12 +70,12 @@ func (h *ServiceAccountHandler) Read(ctx context.Context, client *goapi.GrafanaH
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Core::ServiceAccount",
+				ResourceType: "GRAFANA::Core::ServiceAccount",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::ServiceAccount",
+			ResourceType: "GRAFANA::Core::ServiceAccount",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -89,7 +89,7 @@ func (h *ServiceAccountHandler) Read(ctx context.Context, client *goapi.GrafanaH
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Core::ServiceAccount",
+		ResourceType: "GRAFANA::Core::ServiceAccount",
 		Properties:   string(outJSON),
 	}, nil
 }

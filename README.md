@@ -11,21 +11,21 @@ Manage Grafana instance resources declaratively — dashboards, data sources, fo
 
 | Resource Type | Description | Native ID |
 |---|---|---|
-| `Grafana::Core::Folder` | Dashboard folders with nested hierarchy support | `uid` |
-| `Grafana::Core::Dashboard` | Dashboard definitions (JSON model) | `uid` |
-| `Grafana::Core::DataSource` | Data source connections (Prometheus, Loki, etc.) | `uid` |
-| `Grafana::Core::Team` | Teams for organizing users and permissions | `id` |
-| `Grafana::Core::ServiceAccount` | Service accounts for programmatic API access | `id` |
+| `GRAFANA::Core::Folder` | Dashboard folders with nested hierarchy support | `uid` |
+| `GRAFANA::Core::Dashboard` | Dashboard definitions (JSON model) | `uid` |
+| `GRAFANA::Core::DataSource` | Data source connections (Prometheus, Loki, etc.) | `uid` |
+| `GRAFANA::Core::Team` | Teams for organizing users and permissions | `id` |
+| `GRAFANA::Core::ServiceAccount` | Service accounts for programmatic API access | `id` |
 
 ### Alerting
 
 | Resource Type | Description | Native ID |
 |---|---|---|
-| `Grafana::Alerting::AlertRule` | Individual alert rules with query conditions | `uid` |
-| `Grafana::Alerting::ContactPoint` | Notification channels (Slack, email, PagerDuty, etc.) | `uid` |
-| `Grafana::Alerting::NotificationPolicy` | Alert routing tree (singleton per org) | `receiver` |
-| `Grafana::Alerting::MuteTiming` | Time windows for suppressing notifications | `name` |
-| `Grafana::Alerting::MessageTemplate` | Go templates for notification formatting | `name` |
+| `GRAFANA::Alerting::AlertRule` | Individual alert rules with query conditions | `uid` |
+| `GRAFANA::Alerting::ContactPoint` | Notification channels (Slack, email, PagerDuty, etc.) | `uid` |
+| `GRAFANA::Alerting::NotificationPolicy` | Alert routing tree (singleton per org) | `receiver` |
+| `GRAFANA::Alerting::MuteTiming` | Time windows for suppressing notifications | `name` |
+| `GRAFANA::Alerting::MessageTemplate` | Go templates for notification formatting | `name` |
 
 ## Configuration
 

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Alerting::MessageTemplate", &MessageTemplateHandler{})
+	Register("GRAFANA::Alerting::MessageTemplate", &MessageTemplateHandler{})
 }
 
 // MessageTemplateHandler implements CRUD+List for Grafana message templates.
@@ -58,12 +58,12 @@ func (h *MessageTemplateHandler) Read(ctx context.Context, client *goapi.Grafana
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Alerting::MessageTemplate",
+				ResourceType: "GRAFANA::Alerting::MessageTemplate",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::MessageTemplate",
+			ResourceType: "GRAFANA::Alerting::MessageTemplate",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -75,7 +75,7 @@ func (h *MessageTemplateHandler) Read(ctx context.Context, client *goapi.Grafana
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Alerting::MessageTemplate",
+		ResourceType: "GRAFANA::Alerting::MessageTemplate",
 		Properties:   string(outJSON),
 	}, nil
 }

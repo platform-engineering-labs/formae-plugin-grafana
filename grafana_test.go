@@ -41,7 +41,7 @@ func TestCreateFolder(t *testing.T) {
 	})
 
 	result, err := p.Create(ctx, &resource.CreateRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Label:        "test-folder",
 		Properties:   props,
 		TargetConfig: testTargetConfig(),
@@ -54,7 +54,7 @@ func TestCreateFolder(t *testing.T) {
 	t.Cleanup(func() {
 		p.Delete(ctx, &resource.DeleteRequest{
 			NativeID:     "formae-integ-test-folder",
-			ResourceType: "Grafana::Core::Folder",
+			ResourceType: "GRAFANA::Core::Folder",
 			TargetConfig: testTargetConfig(),
 		})
 	})
@@ -71,7 +71,7 @@ func TestReadFolder(t *testing.T) {
 		"title": "Formae Read Test Folder",
 	})
 	_, err := p.Create(ctx, &resource.CreateRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Label:        "test-read-folder",
 		Properties:   props,
 		TargetConfig: testTargetConfig(),
@@ -81,7 +81,7 @@ func TestReadFolder(t *testing.T) {
 	t.Cleanup(func() {
 		p.Delete(ctx, &resource.DeleteRequest{
 			NativeID:     "formae-integ-test-read-folder",
-			ResourceType: "Grafana::Core::Folder",
+			ResourceType: "GRAFANA::Core::Folder",
 			TargetConfig: testTargetConfig(),
 		})
 	})
@@ -89,7 +89,7 @@ func TestReadFolder(t *testing.T) {
 	// Read
 	result, err := p.Read(ctx, &resource.ReadRequest{
 		NativeID:     "formae-integ-test-read-folder",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestReadFolderNotFound(t *testing.T) {
 
 	result, err := p.Read(ctx, &resource.ReadRequest{
 		NativeID:     "formae-nonexistent-folder-xyz",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestUpdateFolder(t *testing.T) {
 		"title": "Original Title",
 	})
 	_, err := p.Create(ctx, &resource.CreateRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Label:        "test-update-folder",
 		Properties:   props,
 		TargetConfig: testTargetConfig(),
@@ -138,7 +138,7 @@ func TestUpdateFolder(t *testing.T) {
 	t.Cleanup(func() {
 		p.Delete(ctx, &resource.DeleteRequest{
 			NativeID:     "formae-integ-test-update-folder",
-			ResourceType: "Grafana::Core::Folder",
+			ResourceType: "GRAFANA::Core::Folder",
 			TargetConfig: testTargetConfig(),
 		})
 	})
@@ -154,7 +154,7 @@ func TestUpdateFolder(t *testing.T) {
 	})
 	result, err := p.Update(ctx, &resource.UpdateRequest{
 		NativeID:          "formae-integ-test-update-folder",
-		ResourceType:      "Grafana::Core::Folder",
+		ResourceType:      "GRAFANA::Core::Folder",
 		PriorProperties:   priorProps,
 		DesiredProperties: desiredProps,
 		TargetConfig:      testTargetConfig(),
@@ -165,7 +165,7 @@ func TestUpdateFolder(t *testing.T) {
 	// Verify
 	readResult, _ := p.Read(ctx, &resource.ReadRequest{
 		NativeID:     "formae-integ-test-update-folder",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	var readProps map[string]any
@@ -184,7 +184,7 @@ func TestDeleteFolder(t *testing.T) {
 		"title": "Folder To Delete",
 	})
 	_, err := p.Create(ctx, &resource.CreateRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Label:        "test-delete-folder",
 		Properties:   props,
 		TargetConfig: testTargetConfig(),
@@ -194,7 +194,7 @@ func TestDeleteFolder(t *testing.T) {
 	// Delete
 	result, err := p.Delete(ctx, &resource.DeleteRequest{
 		NativeID:     "formae-integ-test-delete-folder",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestDeleteFolder(t *testing.T) {
 	// Verify deleted
 	readResult, _ := p.Read(ctx, &resource.ReadRequest{
 		NativeID:     "formae-integ-test-delete-folder",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	assert.Equal(t, resource.OperationErrorCodeNotFound, readResult.ErrorCode)
@@ -216,7 +216,7 @@ func TestDeleteFolderNotFound(t *testing.T) {
 
 	result, err := p.Delete(ctx, &resource.DeleteRequest{
 		NativeID:     "formae-nonexistent-folder-for-delete",
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	require.NoError(t, err)
@@ -235,7 +235,7 @@ func TestListFolders(t *testing.T) {
 		"title": "Folder For List Test",
 	})
 	_, err := p.Create(ctx, &resource.CreateRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Label:        "test-list-folder",
 		Properties:   props,
 		TargetConfig: testTargetConfig(),
@@ -245,13 +245,13 @@ func TestListFolders(t *testing.T) {
 	t.Cleanup(func() {
 		p.Delete(ctx, &resource.DeleteRequest{
 			NativeID:     "formae-integ-test-list-folder",
-			ResourceType: "Grafana::Core::Folder",
+			ResourceType: "GRAFANA::Core::Folder",
 			TargetConfig: testTargetConfig(),
 		})
 	})
 
 	result, err := p.List(ctx, &resource.ListRequest{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		TargetConfig: testTargetConfig(),
 	})
 	require.NoError(t, err)

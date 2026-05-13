@@ -46,9 +46,9 @@ This will be fixed in a future release.
 | Resource | Type | Target |
 |---|---|---|
 | LGTM stack | `Docker::Compose::Stack` | docker |
-| formae-dashboards | `Grafana::Core::Folder` | grafana |
-| formae-overview | `Grafana::Core::Dashboard` | grafana |
-| formae-plugins | `Grafana::Core::Dashboard` | grafana |
+| formae-dashboards | `GRAFANA::Core::Folder` | grafana |
+| formae-overview | `GRAFANA::Core::Dashboard` | grafana |
+| formae-plugins | `GRAFANA::Core::Dashboard` | grafana |
 
 ## Destroy
 

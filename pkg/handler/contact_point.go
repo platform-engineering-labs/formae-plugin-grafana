@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Alerting::ContactPoint", &ContactPointHandler{})
+	Register("GRAFANA::Alerting::ContactPoint", &ContactPointHandler{})
 }
 
 // ContactPointHandler implements CRUD+List for Grafana contact points.
@@ -84,7 +84,7 @@ func (h *ContactPointHandler) Read(ctx context.Context, client *goapi.GrafanaHTT
 	})
 	if err != nil {
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::ContactPoint",
+			ResourceType: "GRAFANA::Alerting::ContactPoint",
 			ErrorCode:    MapAPIError(err),
 		}, nil
 	}
@@ -105,14 +105,14 @@ func (h *ContactPointHandler) Read(ctx context.Context, client *goapi.GrafanaHTT
 			}
 			outJSON, _ := json.Marshal(out)
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Alerting::ContactPoint",
+				ResourceType: "GRAFANA::Alerting::ContactPoint",
 				Properties:   string(outJSON),
 			}, nil
 		}
 	}
 
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Alerting::ContactPoint",
+		ResourceType: "GRAFANA::Alerting::ContactPoint",
 		ErrorCode:    resource.OperationErrorCodeNotFound,
 	}, nil
 }

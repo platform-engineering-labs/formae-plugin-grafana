@@ -70,14 +70,14 @@ func (p *Plugin) LabelConfig() model.LabelConfig {
 	return model.LabelConfig{
 		DefaultQuery: "$.title",
 		ResourceOverrides: map[string]string{
-			"Grafana::Core::DataSource":             "$.name",
-			"Grafana::Core::Team":                   "$.name",
-			"Grafana::Core::ServiceAccount":         "$.name",
-			"Grafana::Alerting::AlertRule":           "$.title",
-			"Grafana::Alerting::ContactPoint":        "$.name",
-			"Grafana::Alerting::NotificationPolicy":  "$.receiver",
-			"Grafana::Alerting::MuteTiming":          "$.name",
-			"Grafana::Alerting::MessageTemplate":     "$.name",
+			"GRAFANA::Core::DataSource":             "$.name",
+			"GRAFANA::Core::Team":                   "$.name",
+			"GRAFANA::Core::ServiceAccount":         "$.name",
+			"GRAFANA::Alerting::AlertRule":           "$.title",
+			"GRAFANA::Alerting::ContactPoint":        "$.name",
+			"GRAFANA::Alerting::NotificationPolicy":  "$.receiver",
+			"GRAFANA::Alerting::MuteTiming":          "$.name",
+			"GRAFANA::Alerting::MessageTemplate":     "$.name",
 		},
 	}
 }

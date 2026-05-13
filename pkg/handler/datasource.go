@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Core::DataSource", &DataSourceHandler{})
+	Register("GRAFANA::Core::DataSource", &DataSourceHandler{})
 }
 
 // DataSourceHandler implements CRUD+List for Grafana data sources.
@@ -96,12 +96,12 @@ func (h *DataSourceHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPA
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Core::DataSource",
+				ResourceType: "GRAFANA::Core::DataSource",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::DataSource",
+			ResourceType: "GRAFANA::Core::DataSource",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -127,7 +127,7 @@ func (h *DataSourceHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPA
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Core::DataSource",
+		ResourceType: "GRAFANA::Core::DataSource",
 		Properties:   string(outJSON),
 	}, nil
 }

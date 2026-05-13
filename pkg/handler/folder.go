@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Core::Folder", &FolderHandler{})
+	Register("GRAFANA::Core::Folder", &FolderHandler{})
 }
 
 // FolderHandler implements CRUD+List for Grafana folders.
@@ -65,12 +65,12 @@ func (h *FolderHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAPI, 
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Core::Folder",
+				ResourceType: "GRAFANA::Core::Folder",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::Folder",
+			ResourceType: "GRAFANA::Core::Folder",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -83,7 +83,7 @@ func (h *FolderHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAPI, 
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Core::Folder",
+		ResourceType: "GRAFANA::Core::Folder",
 		Properties:   string(outJSON),
 	}, nil
 }

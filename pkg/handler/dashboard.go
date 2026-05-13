@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Core::Dashboard", &DashboardHandler{})
+	Register("GRAFANA::Core::Dashboard", &DashboardHandler{})
 }
 
 // DashboardHandler implements CRUD+List for Grafana dashboards.
@@ -94,12 +94,12 @@ func (h *DashboardHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Core::Dashboard",
+				ResourceType: "GRAFANA::Core::Dashboard",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::Dashboard",
+			ResourceType: "GRAFANA::Core::Dashboard",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -139,7 +139,7 @@ func (h *DashboardHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Core::Dashboard",
+		ResourceType: "GRAFANA::Core::Dashboard",
 		Properties:   string(outJSON),
 	}, nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Alerting::NotificationPolicy", &NotificationPolicyHandler{})
+	Register("GRAFANA::Alerting::NotificationPolicy", &NotificationPolicyHandler{})
 }
 
 // NotificationPolicyHandler implements CRUD for the Grafana notification policy tree.
@@ -99,7 +99,7 @@ func (h *NotificationPolicyHandler) Read(ctx context.Context, client *goapi.Graf
 	resp, err := client.Provisioning.GetPolicyTree()
 	if err != nil {
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::NotificationPolicy",
+			ResourceType: "GRAFANA::Alerting::NotificationPolicy",
 			ErrorCode:    MapAPIError(err),
 		}, nil
 	}
@@ -111,14 +111,14 @@ func (h *NotificationPolicyHandler) Read(ctx context.Context, client *goapi.Graf
 	// to the default receiver). Report as not found so sync can tombstone it.
 	if out.Receiver != nativeID {
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::NotificationPolicy",
+			ResourceType: "GRAFANA::Alerting::NotificationPolicy",
 			ErrorCode:    resource.OperationErrorCodeNotFound,
 		}, nil
 	}
 
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Alerting::NotificationPolicy",
+		ResourceType: "GRAFANA::Alerting::NotificationPolicy",
 		Properties:   string(outJSON),
 	}, nil
 }

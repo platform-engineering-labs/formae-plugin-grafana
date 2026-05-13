@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Alerting::AlertRule", &AlertRuleHandler{})
+	Register("GRAFANA::Alerting::AlertRule", &AlertRuleHandler{})
 }
 
 // AlertRuleHandler implements CRUD+List for Grafana alert rules.
@@ -213,12 +213,12 @@ func (h *AlertRuleHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Alerting::AlertRule",
+				ResourceType: "GRAFANA::Alerting::AlertRule",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::AlertRule",
+			ResourceType: "GRAFANA::Alerting::AlertRule",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -227,7 +227,7 @@ func (h *AlertRuleHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 	out := alertRuleToProps(rule)
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Alerting::AlertRule",
+		ResourceType: "GRAFANA::Alerting::AlertRule",
 		Properties:   string(outJSON),
 	}, nil
 }

@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Core::Team", &TeamHandler{})
+	Register("GRAFANA::Core::Team", &TeamHandler{})
 }
 
 // TeamHandler implements CRUD+List for Grafana teams.
@@ -63,12 +63,12 @@ func (h *TeamHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAPI, na
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Core::Team",
+				ResourceType: "GRAFANA::Core::Team",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Core::Team",
+			ResourceType: "GRAFANA::Core::Team",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -90,7 +90,7 @@ func (h *TeamHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAPI, na
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Core::Team",
+		ResourceType: "GRAFANA::Core::Team",
 		Properties:   string(outJSON),
 	}, nil
 }

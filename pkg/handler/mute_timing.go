@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	Register("Grafana::Alerting::MuteTiming", &MuteTimingHandler{})
+	Register("GRAFANA::Alerting::MuteTiming", &MuteTimingHandler{})
 }
 
 // MuteTimingHandler implements CRUD+List for Grafana mute timings.
@@ -65,12 +65,12 @@ func (h *MuteTimingHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPA
 		code := MapAPIError(err)
 		if code == resource.OperationErrorCodeNotFound {
 			return &resource.ReadResult{
-				ResourceType: "Grafana::Alerting::MuteTiming",
+				ResourceType: "GRAFANA::Alerting::MuteTiming",
 				ErrorCode:    resource.OperationErrorCodeNotFound,
 			}, nil
 		}
 		return &resource.ReadResult{
-			ResourceType: "Grafana::Alerting::MuteTiming",
+			ResourceType: "GRAFANA::Alerting::MuteTiming",
 			ErrorCode:    code,
 		}, nil
 	}
@@ -83,7 +83,7 @@ func (h *MuteTimingHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPA
 	}
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
-		ResourceType: "Grafana::Alerting::MuteTiming",
+		ResourceType: "GRAFANA::Alerting::MuteTiming",
 		Properties:   string(outJSON),
 	}, nil
 }
