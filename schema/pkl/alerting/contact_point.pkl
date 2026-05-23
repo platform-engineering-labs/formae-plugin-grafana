@@ -17,7 +17,10 @@ class ContactPoint extends formae.Resource {
   uid: String?
 
   /// Display name of the contact point.
-  @formae.FieldHint {}
+  /// Cannot be changed after creation (TF `grafana_contact_point.name` is
+  /// `ForceNew: true`; the name is the stable handle used by downstream
+  /// references such as `NotificationPolicy.receiver`).
+  @formae.FieldHint { createOnly = true }
   name: String
 
   /// Contact point type (e.g., "email", "slack", "pagerduty", "webhook").
