@@ -21,11 +21,16 @@ class AlertRule extends formae.Resource {
   title: String
 
   /// UID of the folder containing this rule.
-  @formae.FieldHint {}
+  /// Cannot be changed after creation (TF `grafana_rule_group.folder_uid` is
+  /// `ForceNew: true`; an alert rule's folder is part of its identity in the
+  /// Grafana provisioning model).
+  @formae.FieldHint { createOnly = true }
   folderUid: (String|formae.Resolvable)
 
   /// Name of the rule group this rule belongs to.
-  @formae.FieldHint {}
+  /// Cannot be changed after creation (TF `grafana_rule_group.name` is
+  /// `ForceNew: true`; the rule group is part of an alert rule's identity).
+  @formae.FieldHint { createOnly = true }
   ruleGroup: String
 
   /// Reference to the query/condition that triggers the alert (e.g., "A", "B").
