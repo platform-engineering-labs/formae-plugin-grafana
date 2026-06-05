@@ -1,0 +1,36 @@
+/*
+ * Conformance: settingsMap update path — toggle a value to confirm Update
+ * round-trips the structured form correctly.
+ */
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/alerting/contact_point.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  new contact_point.ContactPoint {
+    label = "test-contact-point-settingsmap"
+    uid = "formae-test-sm-\(testRunID)"
+    name = "Formae Test settingsMap \(testRunID)"
+    contactPointType = "email"
+    settingsMap = new Mapping {
+      ["addresses"] = "formae-test-settingsmap-updated@example.com"
+    }
+  }
+}
