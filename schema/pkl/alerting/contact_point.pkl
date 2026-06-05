@@ -27,10 +27,27 @@ class ContactPoint extends formae.Resource {
   @formae.FieldHint { createOnly = true }
   contactPointType: String
 
-  /// Type-specific settings as a JSON string.
-  /// Structure depends on the contact point type.
+  /// Type-specific settings as a JSON string. Use this when every value is a
+  /// literal. When you need to wire a credential or endpoint from another
+  /// resource (e.g., the PagerDuty integration key from a PD Integration), use
+  /// `settingsMap` instead — its values accept formae Resolvables.
+  ///
+  /// Exactly one of `settings` or `settingsMap` must be set.
   @formae.FieldHint {}
-  settings: String
+  settings: String?
+
+  /// Type-specific settings as a key/value mapping. Each value may be a literal
+  /// string or a `formae.Resolvable` pointing at another resource's property,
+  /// which lets cross-plugin wiring stay in a single apply.
+  ///
+  /// Example — PagerDuty paging via a cross-plugin Resolvable:
+  ///   settingsMap = new Mapping {
+  ///     ["integrationKey"] = pdIntegration.res.integrationKey
+  ///   }
+  ///
+  /// Exactly one of `settings` or `settingsMap` must be set.
+  @formae.FieldHint {}
+  settingsMap: Mapping<String, (String|formae.Resolvable)>?
 
   /// Whether to disable sending resolve notifications.
   @formae.FieldHint {}

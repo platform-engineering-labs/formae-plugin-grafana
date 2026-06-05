@@ -19,11 +19,42 @@ func init() {
 type ContactPointHandler struct{}
 
 type contactPointProps struct {
-	UID                   string `json:"uid,omitempty"`
-	Name                  string `json:"name"`
-	Type                  string `json:"contactPointType"`
-	Settings              string `json:"settings"`
-	DisableResolveMessage bool   `json:"disableResolveMessage,omitempty"`
+	UID                   string            `json:"uid,omitempty"`
+	Name                  string            `json:"name"`
+	Type                  string            `json:"contactPointType"`
+	Settings              string            `json:"settings,omitempty"`
+	SettingsMap           map[string]string `json:"settingsMap,omitempty"`
+	DisableResolveMessage bool              `json:"disableResolveMessage,omitempty"`
+}
+
+// resolveSettings returns the type-specific settings object Grafana expects,
+// pulling from `settingsMap` first (Resolvable-friendly path) and falling back
+// to the legacy `settings` JSON string. Returns a validation error when both
+// are present (ambiguous) or both are absent.
+func (p contactPointProps) resolveSettings() (any, error) {
+	hasMap := len(p.SettingsMap) > 0
+	hasString := p.Settings != ""
+	switch {
+	case hasMap && hasString:
+		return nil, fmt.Errorf("set exactly one of settings or settingsMap, not both")
+	case hasMap:
+		// settingsMap values arrive already-resolved (any formae.Resolvable was
+		// substituted upstream before the Properties JSON reached us), so the
+		// map is plain string -> string and is what Grafana expects.
+		out := make(map[string]any, len(p.SettingsMap))
+		for k, v := range p.SettingsMap {
+			out[k] = v
+		}
+		return out, nil
+	case hasString:
+		var v any
+		if err := json.Unmarshal([]byte(p.Settings), &v); err != nil {
+			return nil, fmt.Errorf("invalid settings JSON: %v", err)
+		}
+		return v, nil
+	default:
+		return nil, fmt.Errorf("one of settings or settingsMap is required")
+	}
 }
 
 func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaHTTPAPI, props json.RawMessage) (*resource.ProgressResult, error) {
@@ -32,9 +63,9 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	var settings any
-	if err := json.Unmarshal([]byte(p.Settings), &settings); err != nil {
-		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid settings JSON: %v", err)), nil
+	settings, err := p.resolveSettings()
+	if err != nil {
+		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
 
 	cp := &models.EmbeddedContactPoint{
@@ -48,13 +79,13 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 	}
 
 	xDisableProvenance := "true"
-	resp, err := client.Provisioning.PostContactpoints(&provisioning.PostContactpointsParams{
+	resp, postErr := client.Provisioning.PostContactpoints(&provisioning.PostContactpointsParams{
 		Body:               cp,
 		XDisableProvenance: &xDisableProvenance,
 		Context:            ctx,
 	})
-	if err != nil {
-		return FailResult(resource.OperationCreate, MapAPIError(err), fmt.Sprintf("failed to create contact point: %v", err)), nil
+	if postErr != nil {
+		return FailResult(resource.OperationCreate, MapAPIError(postErr), fmt.Sprintf("failed to create contact point: %v", postErr)), nil
 	}
 
 	created := resp.GetPayload()
@@ -123,9 +154,9 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	var settings any
-	if err := json.Unmarshal([]byte(p.Settings), &settings); err != nil {
-		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid settings JSON: %v", err)), nil
+	settings, err := p.resolveSettings()
+	if err != nil {
+		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
 
 	cp := &models.EmbeddedContactPoint{
@@ -137,14 +168,14 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 	}
 
 	xDisableProvenance := "true"
-	_, err := client.Provisioning.PutContactpoint(&provisioning.PutContactpointParams{
+	_, putErr := client.Provisioning.PutContactpoint(&provisioning.PutContactpointParams{
 		UID:                nativeID,
 		Body:               cp,
 		XDisableProvenance: &xDisableProvenance,
 		Context:            ctx,
 	})
-	if err != nil {
-		return FailResult(resource.OperationUpdate, MapAPIError(err), fmt.Sprintf("failed to update contact point: %v", err)), nil
+	if putErr != nil {
+		return FailResult(resource.OperationUpdate, MapAPIError(putErr), fmt.Sprintf("failed to update contact point: %v", putErr)), nil
 	}
 
 	readResult, readErr := h.Read(ctx, client, nativeID)
