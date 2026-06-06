@@ -27,16 +27,28 @@ type contactPointProps struct {
 	DisableResolveMessage bool              `json:"disableResolveMessage,omitempty"`
 }
 
-// resolveSettings returns the type-specific settings object Grafana expects,
-// pulling from `settingsMap` first (Resolvable-friendly path) and falling back
-// to the legacy `settings` JSON string. Returns a validation error when both
-// are present (ambiguous) or both are absent.
-func (p contactPointProps) resolveSettings() (any, error) {
+// settingsShape records which form of settings the user submitted, so the
+// handler can round-trip the response in the matching shape. The conformance
+// harness compares the user's submitted Properties with the Properties the
+// handler returns; mismatched shapes (e.g. user submits settingsMap, handler
+// returns settings) trigger "Property X is not expected" failures.
+type settingsShape int
+
+const (
+	settingsShapeNone   settingsShape = iota
+	settingsShapeString               // legacy JSON-string `settings`
+	settingsShapeMap                  // structured `settingsMap`
+)
+
+// resolveSettings returns the type-specific settings object Grafana expects
+// alongside the shape the user submitted in. Returns a validation error when
+// both forms are present (ambiguous) or both are absent.
+func (p contactPointProps) resolveSettings() (any, settingsShape, error) {
 	hasMap := len(p.SettingsMap) > 0
 	hasString := p.Settings != ""
 	switch {
 	case hasMap && hasString:
-		return nil, fmt.Errorf("set exactly one of settings or settingsMap, not both")
+		return nil, settingsShapeNone, fmt.Errorf("set exactly one of settings or settingsMap, not both")
 	case hasMap:
 		// settingsMap values arrive already-resolved (any formae.Resolvable was
 		// substituted upstream before the Properties JSON reached us), so the
@@ -45,16 +57,62 @@ func (p contactPointProps) resolveSettings() (any, error) {
 		for k, v := range p.SettingsMap {
 			out[k] = v
 		}
-		return out, nil
+		return out, settingsShapeMap, nil
 	case hasString:
 		var v any
 		if err := json.Unmarshal([]byte(p.Settings), &v); err != nil {
-			return nil, fmt.Errorf("invalid settings JSON: %v", err)
+			return nil, settingsShapeNone, fmt.Errorf("invalid settings JSON: %v", err)
 		}
-		return v, nil
+		return v, settingsShapeString, nil
 	default:
-		return nil, fmt.Errorf("one of settings or settingsMap is required")
+		return nil, settingsShapeNone, fmt.Errorf("one of settings or settingsMap is required")
 	}
+}
+
+// buildResponseProps assembles the Properties payload that round-trips back to
+// formae. The settings field is populated to match `shape`: when the user
+// submitted `settingsMap`, the response carries `settingsMap` (string-coerced
+// from the API response object); otherwise it carries the JSON-string `settings`.
+// This keeps the conformance harness's submitted-vs-returned comparison happy.
+func buildResponseProps(uid, name, cpType string, settings any, disableResolveMessage bool, shape settingsShape) contactPointProps {
+	out := contactPointProps{
+		UID:                   uid,
+		Name:                  name,
+		Type:                  cpType,
+		DisableResolveMessage: disableResolveMessage,
+	}
+	switch shape {
+	case settingsShapeMap:
+		out.SettingsMap = coerceToStringMap(settings)
+	default:
+		// Default (and settingsShapeString): JSON-string form. Read paths that
+		// haven't observed the user's submitted shape also fall here, which
+		// matches the legacy behaviour for resources created before settingsMap.
+		settingsJSON, _ := json.Marshal(settings)
+		out.Settings = string(settingsJSON)
+	}
+	return out
+}
+
+// coerceToStringMap flattens Grafana's settings (returned as map[string]any)
+// into the string-only mapping that settingsMap declares. Non-string values
+// are JSON-encoded so they round-trip; for the PagerDuty-style use case
+// (single integrationKey string) this is just a passthrough.
+func coerceToStringMap(settings any) map[string]string {
+	m, ok := settings.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if s, isStr := v.(string); isStr {
+			out[k] = s
+			continue
+		}
+		encoded, _ := json.Marshal(v)
+		out[k] = string(encoded)
+	}
+	return out
 }
 
 func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaHTTPAPI, props json.RawMessage) (*resource.ProgressResult, error) {
@@ -63,7 +121,7 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	settings, err := p.resolveSettings()
+	settings, shape, err := p.resolveSettings()
 	if err != nil {
 		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
@@ -89,20 +147,12 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 	}
 
 	created := resp.GetPayload()
-	settingsJSON, _ := json.Marshal(created.Settings)
-
 	cpType := ""
 	if created.Type != nil {
 		cpType = *created.Type
 	}
 
-	out := contactPointProps{
-		UID:                   created.UID,
-		Name:                  created.Name,
-		Type:                  cpType,
-		Settings:              string(settingsJSON),
-		DisableResolveMessage: created.DisableResolveMessage,
-	}
+	out := buildResponseProps(created.UID, created.Name, cpType, created.Settings, created.DisableResolveMessage, shape)
 	outJSON, _ := json.Marshal(out)
 	return SuccessResult(resource.OperationCreate, created.UID, outJSON), nil
 }
@@ -154,7 +204,7 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	settings, err := p.resolveSettings()
+	settings, shape, err := p.resolveSettings()
 	if err != nil {
 		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
@@ -178,12 +228,13 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationUpdate, MapAPIError(putErr), fmt.Sprintf("failed to update contact point: %v", putErr)), nil
 	}
 
-	readResult, readErr := h.Read(ctx, client, nativeID)
-	if readErr != nil || readResult.ErrorCode != "" {
-		outJSON, _ := json.Marshal(p)
-		return SuccessResult(resource.OperationUpdate, nativeID, outJSON), nil
-	}
-	return SuccessResult(resource.OperationUpdate, nativeID, json.RawMessage(readResult.Properties)), nil
+	// Build the response in the same shape the user submitted (Read goes
+	// through the legacy `settings` JSON-string path; calling it here would
+	// mask the user's `settingsMap` submission and trip the conformance
+	// harness's "Property X is not expected" check).
+	out := buildResponseProps(nativeID, p.Name, p.Type, settings, p.DisableResolveMessage, shape)
+	outJSON, _ := json.Marshal(out)
+	return SuccessResult(resource.OperationUpdate, nativeID, outJSON), nil
 }
 
 func (h *ContactPointHandler) Delete(ctx context.Context, client *goapi.GrafanaHTTPAPI, nativeID string) (*resource.ProgressResult, error) {
