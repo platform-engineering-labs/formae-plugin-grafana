@@ -162,10 +162,79 @@ jobs:
         if: always()
         run: make test-env-down
 
+  # Build formae and the plugin once, then share both via artifact across the
+  # conformance matrix. Previously each matrix job re-downloaded formae via
+  # orbital and re-ran `make install`, costing ~60-90s per job; with
+  # max-parallel: 1 and N test cases that compounded. Mirrors the build-once
+  # pattern in formae-plugin-azure's nightly.
+  build-and-install:
+    needs: [discover-conformance-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Set up Pkl
+        uses: pkl-community/setup-pkl@v0
+        with:
+          pkl-version: 0.30.0
+
+      - name: Build formae
+        run: |
+          # CI today defaults to the latest published orbital release. There's no
+          # GitHub release with a downloadable binary, so we build from the
+          # matching source tag to get a binary we can artifact across matrix
+          # jobs. Honors the same formae_version input the matrix step did, with
+          # "latest" → newest tag (including dev tags, to mirror nightly).
+          INPUT_VERSION="${{ inputs.formae_version }}"
+          git clone --depth 1 https://github.com/platform-engineering-labs/formae.git /tmp/formae
+          cd /tmp/formae
+          git fetch --tags
+          if [ -z "$INPUT_VERSION" ] || [ "$INPUT_VERSION" = "latest" ]; then
+            LATEST_TAG=$(git tag -l "[0-9]*" --sort=-version:refname | head -1)
+            VERSION=$(echo "$LATEST_TAG" | cut -d'-' -f1)
+            echo "No formae_version input; latest tag=${LATEST_TAG}, using canonical VERSION=${VERSION}"
+            git checkout "$LATEST_TAG"
+          else
+            VERSION="$INPUT_VERSION"
+            echo "Using formae_version input: ${VERSION}"
+            git checkout "$VERSION" || git checkout "v$VERSION"
+          fi
+          echo "Building formae with VERSION=${VERSION}"
+          make build VERSION="${VERSION}"
+          /tmp/formae/formae --version
+          mkdir -p /tmp/formae-install/bin /tmp/formae-install/.ops
+          touch /tmp/formae-install/.ops/.keep
+          cp /tmp/formae/formae /tmp/formae-install/bin/formae
+
+      - name: Install plugin
+        run: make install
+
+      - name: Upload formae binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: formae-install
+          path: /tmp/formae-install
+          include-hidden-files: true
+          retention-days: 1
+
+      - name: Upload installed plugin tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-installed
+          path: ~/.pel/formae/plugins/
+          retention-days: 1
+
   # Conformance tests run against a local Grafana instance via Docker Compose.
   # Runs each test case sequentially to avoid shared-state conflicts.
   conformance-tests:
-    needs: [discover-conformance-tests, pre-cleanup]
+    needs: [discover-conformance-tests, pre-cleanup, build-and-install]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -191,21 +260,32 @@ jobs:
         with:
           pkl-version: 0.30.0
 
+      - name: Download formae binary
+        uses: actions/download-artifact@v4
+        with:
+          name: formae-install
+          path: /tmp/formae-install
+
+      - name: Download installed plugin tree
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-installed
+          path: ~/.pel/formae/plugins/
+
+      - name: Set up formae binary
+        run: |
+          test -d /tmp/formae-install/.ops
+          chmod +x /tmp/formae-install/bin/formae
+          echo "FORMAE_BINARY=/tmp/formae-install/bin/formae" >> $GITHUB_ENV
+          /tmp/formae-install/bin/formae --version
+
       - name: Start Grafana test instance
         run: make test-env-up
-
-      - name: Install plugin
-        run: make install
 
       - name: Run conformance test (${{ matrix.test-case }})
         env:
           FORMAE_TEST_RUN_ID: ci-${{ github.run_id }}-${{ matrix.test-case }}
-        run: |
-          VERSION="${{ inputs.formae_version }}"
-          if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            VERSION="latest"
-          fi
-          make conformance-test-crud TEST=${{ matrix.test-case }} VERSION="$VERSION"
+        run: make conformance-test-crud TEST=${{ matrix.test-case }}
 
       - name: Stop Grafana test instance
         if: always()

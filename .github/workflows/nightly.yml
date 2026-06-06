@@ -72,32 +72,19 @@ jobs:
         if: always()
         run: make test-env-down
 
-  conformance-tests:
-    needs: [discover-tests, pre-cleanup]
+  # Build formae once and share the binary + source across the conformance
+  # matrix. Per-matrix-job builds were spending ~2 minutes each cloning and
+  # compiling formae; this folds that into a single job and downloads via
+  # artifacts. Mirrors the pattern in formae-plugin-azure's nightly.
+  build-formae:
+    needs: [discover-tests]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      GRAFANA_URL: http://localhost:3333
-      GRAFANA_AUTH: admin:admin
-    strategy:
-      matrix:
-        test-case: ${{ fromJson(needs.discover-tests.outputs.test-cases) }}
-      max-parallel: 1
-      fail-fast: false
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout plugin
-        uses: actions/checkout@v4
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-
-      - name: Set up Pkl
-        uses: pkl-community/setup-pkl@v0
-        with:
-          pkl-version: 0.30.0
 
       - name: Build formae
         run: |
@@ -127,7 +114,71 @@ jobs:
           fi
           echo "Building formae with VERSION=${VERSION}"
           make build VERSION="${VERSION}"
-          echo "FORMAE_BINARY=/tmp/formae/formae" >> $GITHUB_ENV
+          /tmp/formae/formae --version
+          mkdir -p /tmp/formae-install/bin /tmp/formae-install/.ops
+          touch /tmp/formae-install/.ops/.keep
+          cp /tmp/formae/formae /tmp/formae-install/bin/formae
+
+      - name: Upload formae install tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: formae-install
+          path: /tmp/formae-install
+          include-hidden-files: true
+          retention-days: 1
+
+      - name: Upload formae source (for replace directives + Makefile lookup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: formae-source
+          path: /tmp/formae
+          retention-days: 1
+
+  conformance-tests:
+    needs: [discover-tests, pre-cleanup, build-formae]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GRAFANA_URL: http://localhost:3333
+      GRAFANA_AUTH: admin:admin
+    strategy:
+      matrix:
+        test-case: ${{ fromJson(needs.discover-tests.outputs.test-cases) }}
+      max-parallel: 1
+      fail-fast: false
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Set up Pkl
+        uses: pkl-community/setup-pkl@v0
+        with:
+          pkl-version: 0.30.0
+
+      - name: Download formae install tree
+        uses: actions/download-artifact@v4
+        with:
+          name: formae-install
+          path: /tmp/formae-install
+
+      - name: Download formae source
+        uses: actions/download-artifact@v4
+        with:
+          name: formae-source
+          path: /tmp/formae
+
+      - name: Set up formae binary
+        run: |
+          test -d /tmp/formae-install/.ops
+          chmod +x /tmp/formae-install/bin/formae
+          echo "FORMAE_BINARY=/tmp/formae-install/bin/formae" >> $GITHUB_ENV
+          /tmp/formae-install/bin/formae --version
 
       # Temporary: until Orbital package manager handles plugin version
       # coordination, the formae Makefile is the source of truth for which
