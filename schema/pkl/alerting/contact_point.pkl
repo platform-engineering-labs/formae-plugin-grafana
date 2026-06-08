@@ -27,13 +27,15 @@ class ContactPoint extends formae.Resource {
   @formae.FieldHint { createOnly = true }
   contactPointType: String
 
-  /// Type-specific settings as a JSON string. Use this when every value is a
-  /// literal. When you need to wire a credential or endpoint from another
-  /// resource (e.g., the PagerDuty integration key from a PD Integration), use
-  /// `settingsMap` instead — its values accept formae Resolvables.
+  /// Type-specific settings as a JSON string. This is the canonical persisted
+  /// shape of a ContactPoint's settings — even when the user submitted via
+  /// `settingsMap`, the handler stores the resolved values here. Read and
+  /// inventory always return `settings`; `hasProviderDefault` tells the
+  /// conformance harness that observing `settings` in actual state is
+  /// expected, regardless of which submission form was used.
   ///
-  /// Exactly one of `settings` or `settingsMap` must be set.
-  @formae.FieldHint {}
+  /// Exactly one of `settings` or `settingsMap` must be set on submission.
+  @formae.FieldHint { hasProviderDefault = true }
   settings: String?
 
   /// Type-specific settings as a key/value mapping. Each value may be a literal
