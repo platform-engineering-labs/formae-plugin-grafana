@@ -4,7 +4,7 @@ module alerting.notification_policy
 import "@formae/formae.pkl"
 
 /// The Grafana notification policy routing tree.
-/// This is a singleton resource per organization — there is exactly one
+/// This is a singleton resource per organization - there is exactly one
 /// notification policy that routes alerts to contact points.
 @formae.ResourceHint {
   type = "GRAFANA::Alerting::NotificationPolicy"

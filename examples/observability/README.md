@@ -1,6 +1,6 @@
 # Observability Example
 
-Deploy a full LGTM (Loki, Grafana, Tempo, Mimir) observability stack via Docker Compose, then provision Grafana dashboards to monitor your formae agent — all managed as infrastructure.
+Deploy a full LGTM (Loki, Grafana, Tempo, Mimir) observability stack via Docker Compose, then provision Grafana dashboards to monitor your formae agent - all managed as infrastructure.
 
 This example demonstrates **target resolvables**: the Grafana target automatically resolves its connection endpoint from the Docker Compose stack, so you don't need to hardcode URLs.
 

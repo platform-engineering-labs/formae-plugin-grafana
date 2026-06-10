@@ -1,5 +1,5 @@
 /*
- * Conformance: settingsMap update path — toggle a value to confirm Update
+ * Conformance: settingsMap update path - toggle a value to confirm Update
  * round-trips the structured form correctly.
  */
 amends "@formae/forma.pkl"

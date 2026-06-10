@@ -16,7 +16,7 @@ func init() {
 }
 
 // NotificationPolicyHandler implements CRUD for the Grafana notification policy tree.
-// This is a singleton resource — there is exactly one per organization.
+// This is a singleton resource - there is exactly one per organization.
 type NotificationPolicyHandler struct{}
 
 type notificationPolicyProps struct {

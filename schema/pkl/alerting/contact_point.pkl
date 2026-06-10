@@ -28,7 +28,7 @@ class ContactPoint extends formae.Resource {
   contactPointType: String
 
   /// Type-specific settings as a JSON string. This is the canonical persisted
-  /// shape of a ContactPoint's settings — even when the user submitted via
+  /// shape of a ContactPoint's settings - even when the user submitted via
   /// `settingsMap`, the handler stores the resolved values here. Read and
   /// inventory always return `settings`; `hasProviderDefault` tells the
   /// conformance harness that observing `settings` in actual state is
@@ -42,7 +42,7 @@ class ContactPoint extends formae.Resource {
   /// string or a `formae.Resolvable` pointing at another resource's property,
   /// which lets cross-plugin wiring stay in a single apply.
   ///
-  /// Example — PagerDuty paging via a cross-plugin Resolvable:
+  /// Example - PagerDuty paging via a cross-plugin Resolvable:
   ///   settingsMap = new Mapping {
   ///     ["integrationKey"] = pdIntegration.res.integrationKey
   ///   }

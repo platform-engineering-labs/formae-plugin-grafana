@@ -3,7 +3,7 @@
 [![CI](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/ci.yml/badge.svg)](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/ci.yml)
 [![Nightly](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/nightly.yml/badge.svg)](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/nightly.yml)
 
-Manage Grafana instance resources declaratively — dashboards, data sources, folders, alerting, teams, and service accounts. Works with both self-hosted Grafana and Grafana Cloud instances.
+Manage Grafana instance resources declaratively - dashboards, data sources, folders, alerting, teams, and service accounts. Works with both self-hosted Grafana and Grafana Cloud instances.
 
 ## Supported Resources
 
@@ -64,17 +64,17 @@ export GRAFANA_AUTH="glsa_your_service_account_token"
 
 See the [examples/](examples/) directory.
 
-**Basic** — folder, data source, dashboard:
+**Basic** - folder, data source, dashboard:
 ```bash
 formae apply --mode reconcile --watch examples/basic/main.pkl
 ```
 
-**Alerting** — contact points, mute timings, templates:
+**Alerting** - contact points, mute timings, templates:
 ```bash
 formae apply --mode reconcile --watch examples/alerting/main.pkl
 ```
 
-**Observability** — LGTM stack via Docker Compose with Grafana dashboards provisioned through a target resolvable (requires formae >= 0.83.0 and formae-plugin-compose):
+**Observability** - LGTM stack via Docker Compose with Grafana dashboards provisioned through a target resolvable (requires formae >= 0.83.0 and formae-plugin-compose):
 ```bash
 formae apply --mode reconcile --watch examples/observability/main.pkl
 ```

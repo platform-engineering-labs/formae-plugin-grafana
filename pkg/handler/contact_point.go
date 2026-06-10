@@ -58,7 +58,7 @@ func (p contactPointProps) resolveSettings() (any, error) {
 }
 
 // buildResponseProps assembles the Properties payload that round-trips back to
-// formae. `settings` is the canonical persisted shape — even when the user
+// formae. `settings` is the canonical persisted shape - even when the user
 // submitted via `settingsMap`. The schema marks `settings` as
 // hasProviderDefault so the conformance harness tolerates its appearance in
 // actual when only `settingsMap` was declared in source.

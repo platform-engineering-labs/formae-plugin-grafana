@@ -76,7 +76,7 @@ forma {
     config = new compose.Config {}
   }
 
-  // Grafana target — URL resolved from compose stack endpoint
+  // Grafana target - URL resolved from compose stack endpoint
   local grafanaTarget = new formae.Target {
     label = "grafana"
     namespace = "GRAFANA"
