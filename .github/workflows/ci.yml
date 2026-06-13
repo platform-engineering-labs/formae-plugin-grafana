@@ -261,13 +261,13 @@ jobs:
           pkl-version: 0.30.0
 
       - name: Download formae binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: formae-install
           path: /tmp/formae-install
 
       - name: Download installed plugin tree
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: plugin-installed
           path: ~/.pel/formae/plugins/
