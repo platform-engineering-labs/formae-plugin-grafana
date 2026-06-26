@@ -120,7 +120,7 @@ jobs:
           cp /tmp/formae/formae /tmp/formae-install/bin/formae
 
       - name: Upload formae install tree
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formae-install
           path: /tmp/formae-install
@@ -128,7 +128,7 @@ jobs:
           retention-days: 1
 
       - name: Upload formae source (for replace directives + Makefile lookup)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formae-source
           path: /tmp/formae

@@ -217,7 +217,7 @@ jobs:
         run: make install
 
       - name: Upload formae binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formae-install
           path: /tmp/formae-install
@@ -225,7 +225,7 @@ jobs:
           retention-days: 1
 
       - name: Upload installed plugin tree
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: plugin-installed
           path: ~/.pel/formae/plugins/
