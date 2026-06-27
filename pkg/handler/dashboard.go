@@ -26,6 +26,58 @@ type dashboardProps struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// serverAssignedCounters are top-level dashboard-model keys Grafana assigns and
+// increments on every save/reload. Tracking them makes identical content drift
+// on each reconcile, so they are stripped from configJson on Read.
+var serverAssignedCounters = []string{"id", "version", "iteration"}
+
+// promotedToResourceProps are top-level keys formae surfaces as dedicated
+// dashboardProps fields, so they must not be duplicated inside configJson.
+var promotedToResourceProps = []string{"uid", "title"}
+
+// dashboardModelToProps converts a Grafana dashboard model plus its metadata
+// into the recorded dashboardProps. It surfaces uid/title as dedicated fields,
+// strips the server-assigned counters and promoted keys from the model, and
+// marshals the remainder into configJson. nativeID is the fallback uid when the
+// model carries none.
+//
+// Stripping is top-level only — map-key deletion never recurses into panels[],
+// whose elements carry their own user-authored id. Mutating the model map is
+// intentional: it is used only for the subsequent marshal here, and full.Meta
+// is read separately.
+func dashboardModelToProps(model interface{}, meta *models.DashboardMeta, nativeID string) dashboardProps {
+	dashboardMap, _ := model.(map[string]interface{})
+	uid := nativeID
+	title := ""
+	if dashboardMap != nil {
+		if u, ok := dashboardMap["uid"].(string); ok {
+			uid = u
+		}
+		if t, ok := dashboardMap["title"].(string); ok {
+			title = t
+		}
+		for _, k := range serverAssignedCounters {
+			delete(dashboardMap, k)
+		}
+		for _, k := range promotedToResourceProps {
+			delete(dashboardMap, k)
+		}
+	}
+	dashboardJSON, _ := json.Marshal(model)
+
+	folderUID := ""
+	if meta != nil {
+		folderUID = meta.FolderUID
+	}
+
+	return dashboardProps{
+		UID:        uid,
+		Title:      title,
+		FolderUID:  folderUID,
+		ConfigJSON: string(dashboardJSON),
+	}
+}
+
 func parseDashboardJSON(configJSON string) (map[string]interface{}, error) {
 	var dashboard map[string]interface{}
 	if err := json.Unmarshal([]byte(configJSON), &dashboard); err != nil {
@@ -106,37 +158,7 @@ func (h *DashboardHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAP
 
 	full := resp.GetPayload()
 
-	// Extract uid and title from the dashboard model, then strip
-	// server-managed fields so configJson only contains user config.
-	dashboardMap, _ := full.Dashboard.(map[string]interface{})
-	uid := nativeID
-	title := ""
-	if dashboardMap != nil {
-		if u, ok := dashboardMap["uid"].(string); ok {
-			uid = u
-		}
-		if t, ok := dashboardMap["title"].(string); ok {
-			title = t
-		}
-		// Remove server-managed fields from the dashboard model
-		delete(dashboardMap, "id")
-		delete(dashboardMap, "uid")
-		delete(dashboardMap, "title")
-		delete(dashboardMap, "version")
-	}
-	dashboardJSON, _ := json.Marshal(full.Dashboard)
-
-	folderUID := ""
-	if full.Meta != nil {
-		folderUID = full.Meta.FolderUID
-	}
-
-	out := dashboardProps{
-		UID:        uid,
-		Title:      title,
-		FolderUID:  folderUID,
-		ConfigJSON: string(dashboardJSON),
-	}
+	out := dashboardModelToProps(full.Dashboard, full.Meta, nativeID)
 	outJSON, _ := json.Marshal(out)
 	return &resource.ReadResult{
 		ResourceType: "GRAFANA::Core::Dashboard",
