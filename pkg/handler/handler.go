@@ -4,7 +4,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"os"
 	"strings"
 
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
@@ -82,9 +86,41 @@ func MapAPIError(err error) resource.OperationErrorCode {
 		return resource.OperationErrorCodeAlreadyExists
 	case strings.Contains(errStr, "rate limit"):
 		return resource.OperationErrorCodeThrottling
-	default:
-		return resource.OperationErrorCodeInternalFailure
 	}
+
+	// No HTTP status and no recognized server-error substring. Distinguish a
+	// transport failure (Grafana never answered — the endpoint is gone) from an
+	// opaque server-side error: a transport failure must surface as a
+	// reachability signal (NetworkFailure/ServiceTimeout) so the agent can tell
+	// "unreachable" from "deleted" and reap a permanently-gone target. An
+	// InternalFailure carries no health signal and would leave the target
+	// wrongly marked reachable forever.
+	if code, ok := transportErrorCode(err); ok {
+		return code
+	}
+	return resource.OperationErrorCodeInternalFailure
+}
+
+// transportErrorCode classifies a client-side transport failure — one where no
+// HTTP response was received from Grafana — into a reachability signal. It
+// returns (code, true) for a genuine transport failure and ("", false)
+// otherwise, so callers can fall back to a server-error classification.
+func transportErrorCode(err error) (resource.OperationErrorCode, bool) {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+		return resource.OperationErrorCodeServiceTimeout, true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return resource.OperationErrorCodeServiceTimeout, true
+		}
+		return resource.OperationErrorCodeNetworkFailure, true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return resource.OperationErrorCodeNetworkFailure, true
+	}
+	return "", false
 }
 
 // FailResult creates a failure ProgressResult for the given operation.
