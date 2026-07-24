@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Install with `sudo formae plugin install grafana` on the host that runs the
 formae agent.
 
+## [0.1.6]
+
+### Fixed
+
+- A Grafana target whose endpoint is unreachable (the backing service is gone —
+  for example a torn-down Compose stack or a decommissioned host) is now
+  reported as unreachable instead of an opaque internal failure. Transport
+  failures on a read — connection refused, DNS failure, dial/read timeout — now
+  map to `NetworkFailure`/`ServiceTimeout` rather than the `InternalFailure`
+  default, so the agent can tell "unreachable" apart from "deleted" and
+  eventually reap a permanently-gone target.
+
 ## [0.1.5]
 
 ### Changed
