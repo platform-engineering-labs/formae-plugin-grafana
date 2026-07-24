@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Install with `sudo formae plugin install grafana` on the host that runs the
 formae agent.
 
-## [Unreleased]
+## [0.1.6]
 
 ### Fixed
 
