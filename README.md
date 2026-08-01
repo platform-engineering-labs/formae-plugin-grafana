@@ -48,7 +48,45 @@ new formae.Target {
 
 ### Credentials
 
-Set the `GRAFANA_AUTH` environment variable. Supported formats:
+The Grafana target authenticates with one of two methods, in priority order:
+
+#### 1. `username` and `password` Config fields (recommended)
+
+Both fields accept either a literal string or a formae resolvable, so the
+credentials can be sourced from a secret and resolved live at apply time. There
+is no credential in the agent environment, and no agent restart when the
+credential rotates. When both are set they take priority over `GRAFANA_AUTH`.
+
+```pkl
+import "@aws/secretsmanager/secret.pkl" as secretmod
+
+// A secret holding {"username": "...", "password": "..."} as JSON.
+local grafanaCreds = new secretmod.Secret {
+  label = "grafana-admin"
+  name = "grafana-admin-creds"
+}
+
+new formae.Target {
+  label = "my-grafana"
+  namespace = "GRAFANA"
+  config = new grafana.Config {
+    url = "https://grafana.example.com"
+    username = grafanaCreds.res.secretValue.json("username")
+    password = grafanaCreds.res.secretValue.json("password")
+  }
+}
+```
+
+The target config persists only a reference to the secret; the plaintext
+credential never lands in the datastore. Any formae secret works here (for
+example an AWS Secrets Manager secret, an Azure Key Vault secret, or a Kubernetes
+Secret), so the credential can live alongside the infrastructure it protects.
+
+#### 2. `GRAFANA_AUTH` environment variable (fallback)
+
+Used when `username` and `password` are not both set. This is the right choice
+for a service account token or API key (the resolvable fields above cover basic
+auth). Supported formats:
 
 | Format | Example |
 |---|---|
