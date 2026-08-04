@@ -23,7 +23,7 @@ type dataSourceProps struct {
 	Type           string `json:"datasourceType"`
 	URL            string `json:"url,omitempty"`
 	Access         string `json:"access,omitempty"`
-	IsDefault      bool   `json:"isDefault,omitempty"`
+	IsDefault      bool   `json:"isDefault"`
 	BasicAuth      bool   `json:"basicAuth,omitempty"`
 	BasicAuthUser  string `json:"basicAuthUser,omitempty"`
 	JSONData       string `json:"jsonData,omitempty"`
