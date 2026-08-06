@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Install with `sudo formae plugin install grafana` on the host that runs the
 formae agent.
 
+## [Unreleased]
+
+### Added
+
+- `NotificationPolicy.receiver` now accepts a resolvable to a contact point's
+  name (`myContactPoint.res.name`) as well as a literal string, and
+  `ContactPoint` exposes a `res` resolvable to support it. Grafana rejects a
+  policy tree naming a receiver that does not exist, so previously a first apply
+  could send the policy before its contact point existed and fail, and a destroy
+  could delete the contact point before the policy was reset, leaving the tree
+  inconsistent. Using the resolvable makes the dependency explicit, so formae
+  creates the contact point first and resets the policy first on teardown.
+  Receivers named inside `routes` are part of an opaque JSON string and still
+  carry no dependency edge.
+
 ## [0.1.6]
 
 ### Fixed
