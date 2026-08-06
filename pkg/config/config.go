@@ -16,11 +16,15 @@ import (
 )
 
 // TargetConfig holds Grafana target settings from the forma file.
-// Contains only the deployment location, NOT credentials.
 //
 // The Url field receives the resolved value from the formae engine. When the
 // PKL config uses a resolvable (e.g., lgtmStack.res.endpoints.at("lgtm:3000")),
 // formae resolves it to a plain URL string before passing it to the plugin.
+//
+// When Username and Password are both non-empty the plugin uses them for basic
+// auth directly, without consulting the GRAFANA_AUTH environment variable.
+// Either field may originate from a formae-managed secret resolved live by the
+// agent (no restart required).
 //
 // Deprecated: Endpoints and EndpointKey are superseded by collection resolvables
 // (MappingResolvable.at()). Use url = stack.res.endpoints.at("key") instead.
@@ -29,6 +33,8 @@ type TargetConfig struct {
 	Type        string            `json:"Type"`
 	URL         string            `json:"Url,omitempty"`
 	OrgID       *int64            `json:"OrgId,omitempty"`
+	Username    string            `json:"Username,omitempty"`
+	Password    string            `json:"Password,omitempty"`
 	Endpoints   map[string]string `json:"Endpoints,omitempty"`   // Deprecated: use resolvable url instead
 	EndpointKey string            `json:"EndpointKey,omitempty"` // Deprecated: use resolvable url instead
 }
@@ -53,17 +59,19 @@ func ParseTargetConfig(data json.RawMessage) (*TargetConfig, error) {
 	return &cfg, nil
 }
 
-// NewClient creates a Grafana API client from target config and environment credentials.
-// Authentication is read from the GRAFANA_AUTH environment variable:
-//   - Service account token (glsa_...)
-//   - API key (eyJr...)
-//   - Basic auth (user:password)
+// NewClient creates a Grafana API client from target config and credentials.
+//
+// Credential resolution order:
+//  1. Config-level basic auth: when both cfg.Username and cfg.Password are
+//     non-empty, they are used directly (values arrive pre-resolved from the
+//     formae engine — no GRAFANA_AUTH lookup is performed).
+//  2. Environment variable fallback: GRAFANA_AUTH is consulted when config
+//     credentials are absent. It accepts a service account token (glsa_…),
+//     an API key (eyJ…), or "user:password" for basic auth.
+//
+// An error is returned only when neither config credentials nor GRAFANA_AUTH
+// are available.
 func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
-	auth := os.Getenv("GRAFANA_AUTH")
-	if auth == "" {
-		return nil, fmt.Errorf("GRAFANA_AUTH environment variable must be set")
-	}
-
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Grafana URL %q: %w", cfg.URL, err)
@@ -88,14 +96,24 @@ func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
 		Schemes:  []string{scheme},
 	}
 
-	// Detect basic auth (user:password format) vs token
-	if strings.Contains(auth, ":") && !strings.HasPrefix(auth, "glsa_") && !strings.HasPrefix(auth, "eyJ") {
-		transportCfg.BasicAuth = url.UserPassword(
-			auth[:strings.Index(auth, ":")],
-			auth[strings.Index(auth, ":")+1:],
-		)
+	if cfg.Username != "" && cfg.Password != "" {
+		// Config-level basic auth takes priority (sourced from a resolved secret).
+		transportCfg.BasicAuth = url.UserPassword(cfg.Username, cfg.Password)
 	} else {
-		transportCfg.APIKey = auth
+		// Fall back to the GRAFANA_AUTH environment variable.
+		auth := os.Getenv("GRAFANA_AUTH")
+		if auth == "" {
+			return nil, fmt.Errorf("no credentials: set username/password in the target Config or the GRAFANA_AUTH environment variable")
+		}
+		// Detect basic auth (user:password format) vs token.
+		if strings.Contains(auth, ":") && !strings.HasPrefix(auth, "glsa_") && !strings.HasPrefix(auth, "eyJ") {
+			transportCfg.BasicAuth = url.UserPassword(
+				auth[:strings.Index(auth, ":")],
+				auth[strings.Index(auth, ":")+1:],
+			)
+		} else {
+			transportCfg.APIKey = auth
+		}
 	}
 
 	if cfg.OrgID != nil {

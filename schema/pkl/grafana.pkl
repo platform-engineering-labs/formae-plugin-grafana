@@ -5,9 +5,14 @@ module grafana
 import "@formae/formae.pkl"
 
 /// Target configuration for a Grafana instance.
-/// Contains only the deployment location, NOT credentials.
-/// Authentication is provided via environment variables:
-///   GRAFANA_AUTH - Service account token, API key, or "user:password" for basic auth
+/// Contains the deployment location and optional credentials.
+///
+/// Credentials can be supplied in two ways (in priority order):
+///   1. Via `username` and `password` fields (recommended — supports formae secrets via resolvable):
+///        username = someSecret.res.secretValue.json("username")
+///        password = someSecret.res.secretValue.json("password")
+///   2. Via the GRAFANA_AUTH environment variable (fallback):
+///        GRAFANA_AUTH - Service account token, API key, or "user:password" for basic auth
 ///
 /// The url can be a literal string or a resolvable reference to another resource's
 /// property (e.g., an ALB Listener URL or a Compose stack endpoint):
@@ -23,7 +28,19 @@ open class Config {
   /// Optional organization ID. Defaults to the org associated with the auth token.
   hidden orgId: Int?
 
+  /// Optional username for basic auth. When both username and password are set they
+  /// take priority over the GRAFANA_AUTH environment variable. Accepts a literal
+  /// string or a resolvable (e.g. sourced from a formae-managed secret).
+  hidden username: (String|formae.Resolvable)?
+
+  /// Optional password for basic auth. When both username and password are set they
+  /// take priority over the GRAFANA_AUTH environment variable. Accepts a literal
+  /// string or a resolvable (e.g. sourced from a formae-managed secret).
+  hidden password: (String|formae.Resolvable)?
+
   fixed Type: String = type
   fixed Url: String|formae.Resolvable = url
   fixed OrgId: Int? = orgId
+  fixed Username: (String|formae.Resolvable)? = username
+  fixed Password: (String|formae.Resolvable)? = password
 }
