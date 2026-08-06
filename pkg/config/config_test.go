@@ -6,7 +6,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,7 +39,7 @@ func TestParseTargetConfig_MissingUrl(t *testing.T) {
 // are present in the target config the client is constructed using those values
 // for basic auth, without consulting GRAFANA_AUTH.
 func TestNewClient_ConfigCredentials(t *testing.T) {
-	os.Unsetenv("GRAFANA_AUTH")
+	t.Setenv("GRAFANA_AUTH", "")
 
 	cfg := &TargetConfig{
 		Type:     "Grafana",
@@ -84,7 +83,7 @@ func TestNewClient_EnvFallback_BasicAuth(t *testing.T) {
 // TestNewClient_NoCreds verifies that an error is returned when neither config
 // credentials nor GRAFANA_AUTH are available.
 func TestNewClient_NoCreds(t *testing.T) {
-	os.Unsetenv("GRAFANA_AUTH")
+	t.Setenv("GRAFANA_AUTH", "")
 
 	cfg := &TargetConfig{
 		Type: "Grafana",
