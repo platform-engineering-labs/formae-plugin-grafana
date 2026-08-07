@@ -6,22 +6,31 @@ This example demonstrates **target resolvables**: the Grafana target automatical
 
 ## Prerequisites
 
-- formae >= 0.83.0
+- formae >= 0.89.0
 - [formae-plugin-grafana](https://github.com/platform-engineering-labs/formae-plugin-grafana) installed
 - [formae-plugin-compose](https://github.com/platform-engineering-labs/formae-plugin-compose) installed
 - Docker with Compose v2 plugin
 
-## Environment Variables
+## Credentials
 
-| Variable | Value | Description |
-|---|---|---|
-| `GRAFANA_AUTH` | `admin:admin` | The LGTM stack uses default admin credentials. Must be set **before** starting the agent. |
+No environment variable is needed. The Grafana target carries a `BasicAuth`
+block with the LGTM stack's default `admin:admin` credentials, so the
+credentials live in the forma alongside the stack they belong to.
+
+A literal credential is fine for a throwaway local stack like this one. Anywhere
+else, source it from a formae secret so the plaintext stays out of the datastore
+and rotations are picked up without an agent restart:
+
+```pkl
+auth = new grafana.TokenAuth {
+  token = grafanaToken.res.secretValue
+}
+```
 
 ## Usage
 
 ```bash
-# Set credentials and start the agent
-export GRAFANA_AUTH=admin:admin
+# Start the agent
 formae agent start
 
 # Deploy the LGTM stack and Grafana dashboards
@@ -36,7 +45,7 @@ The first apply creates 7 resources: the Docker Compose stack, two targets (dock
 
 ```bash
 formae agent stop
-GRAFANA_AUTH=admin:admin formae agent start
+formae agent start
 ```
 
 This will be fixed in a future release.
