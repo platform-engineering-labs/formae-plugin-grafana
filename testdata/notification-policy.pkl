@@ -21,17 +21,18 @@ forma {
     }
   }
 
-  new contact_point.ContactPoint {
+  local testContactPoint = new contact_point.ContactPoint {
     label = "test-np-contact-point"
     uid = "formae-test-npcp-\(testRunID)"
     name = "formae-test-np-receiver-\(testRunID)"
     contactPointType = "email"
     settings = #"{"addresses":"formae-test-np@example.com","singleEmail":true}"#
   }
+  testContactPoint
 
   new notification_policy.NotificationPolicy {
     label = "test-notification-policy"
-    receiver = "formae-test-np-receiver-\(testRunID)"
+    receiver = testContactPoint.res.name
     groupBy = #"["alertname"]"#
     groupWait = "30s"
     groupInterval = "5m"

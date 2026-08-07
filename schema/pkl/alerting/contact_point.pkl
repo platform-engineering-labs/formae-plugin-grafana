@@ -3,6 +3,20 @@ module alerting.contact_point
 
 import "@formae/formae.pkl"
 
+const type = "GRAFANA::Alerting::ContactPoint"
+
+/// Resolvable reference to a ContactPoint.
+open class ContactPointResolvable extends formae.Resolvable {
+  hidden type = module.type
+
+  /// The contact point's name. This is the handle downstream resources use to
+  /// refer to a contact point - notably `NotificationPolicy.receiver`, which
+  /// Grafana matches by name rather than by uid.
+  hidden name: ContactPointResolvable = (this) {
+    property = "name"
+  }
+}
+
 /// A Grafana alerting contact point (notification channel).
 /// Supports email, Slack, PagerDuty, webhook, and many other integrations.
 @formae.ResourceHint {
@@ -54,4 +68,11 @@ class ContactPoint extends formae.Resource {
   /// Whether to disable sending resolve notifications.
   @formae.FieldHint {}
   disableResolveMessage: Boolean = false
+
+  local parent = this
+
+  hidden res: ContactPointResolvable = new {
+    label = parent.label
+    stack = parent.stack?.label
+  }
 }
