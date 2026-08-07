@@ -23,6 +23,17 @@ formae agent.
   Receivers named inside `routes` are part of an opaque JSON string and still
   carry no dependency edge.
 
+### Fixed
+
+- Updating a contact point no longer records its secret settings in cleartext.
+  Grafana stores the secret fields of a contact point encrypted (a Slack `url`,
+  a PagerDuty `integrationKey`, a webhook `password`) and returns them as
+  `[REDACTED]` on every read path. Update echoed back the settings it had just
+  sent instead of the server's view, so the plaintext secret was written into
+  recorded state on every update, and stayed permanently diverged from what a
+  read reported. Update now reports the state read back from Grafana, which is
+  what create already did.
+
 ## [0.1.6]
 
 ### Fixed
