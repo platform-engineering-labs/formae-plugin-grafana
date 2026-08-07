@@ -36,8 +36,9 @@ local onCall = new contact_point.ContactPoint {
   label = "on-call"
   name = "on-call"
   contactPointType = "slack"
-  settings = #"{"url":"https://hooks.slack.com/services/…","recipient":"#alerts"}"#
+  settings = ##"{"url":"https://hooks.slack.com/services/…","recipient":"#alerts"}"##
 }
+onCall  // a `local` binding is not emitted on its own; name it to add it to the forma
 
 new notification_policy.NotificationPolicy {
   label = "default-routing"
