@@ -76,12 +76,25 @@ forma {
     config = new compose.Config {}
   }
 
-  // Grafana target - URL resolved from compose stack endpoint
+  // Grafana target - URL resolved from compose stack endpoint.
+  //
+  // The LGTM stack ships with the default admin credentials, so a literal
+  // BasicAuth block is fine here. Outside a throwaway local stack, source the
+  // credential from a formae secret instead, which keeps the plaintext out of
+  // the datastore and picks up rotations without an agent restart:
+  //
+  //   auth = new grafana.TokenAuth {
+  //     token = grafanaToken.res.secretValue
+  //   }
   local grafanaTarget = new formae.Target {
     label = "grafana"
     namespace = "GRAFANA"
     config = new grafana.Config {
       url = lgtmStack.res.endpoints.at("lgtm:3000")
+      auth = new grafana.BasicAuth {
+        username = "admin"
+        password = "admin"
+      }
     }
   }
   grafanaTarget
