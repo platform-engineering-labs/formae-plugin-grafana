@@ -49,6 +49,14 @@ class ContactPoint extends formae.Resource {
   /// expected, regardless of which submission form was used.
   ///
   /// Exactly one of `settings` or `settingsMap` must be set on submission.
+  ///
+  /// Do NOT use this form when any value is one Grafana treats as a secret (a
+  /// Slack `url` or `token`, a PagerDuty `integrationKey`, a webhook
+  /// `password`). Grafana stores those encrypted and returns the literal
+  /// `[REDACTED]` in their place on every read, so the declared plaintext and
+  /// the value read back occupy this same field and never compare equal: the
+  /// contact point then reports drift on every sync, permanently. Use
+  /// `settingsMap` instead, which is submission-only and never read back.
   @formae.FieldHint { hasProviderDefault = true }
   settings: String?
 
@@ -62,6 +70,10 @@ class ContactPoint extends formae.Resource {
   ///   }
   ///
   /// Exactly one of `settings` or `settingsMap` must be set.
+  ///
+  /// Prefer this form for any contact point carrying a value Grafana treats as
+  /// a secret; see the note on `settings` for why the JSON-string form drifts
+  /// permanently in that case.
   @formae.FieldHint {}
   settingsMap: Mapping<String, (String|formae.Resolvable)>?
 

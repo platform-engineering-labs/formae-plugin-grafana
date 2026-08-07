@@ -1,5 +1,10 @@
 name = "grafana"
-version = "0.1.3"
+// Placeholder, deliberately not the released version. The release pipeline
+// rewrites this line from the git tag when it builds the package, so whatever
+// is committed here is never published. Kept at 0.0.0 so it cannot silently go
+// stale or be mistaken for the version users actually install; the tags in this
+// repo are the source of truth.
+version = "0.0.0"
 namespace = "GRAFANA"
 summary = "Grafana resource plugin"
 description = "Grafana instance management plugin for formae"
