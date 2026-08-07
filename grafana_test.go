@@ -257,3 +257,62 @@ func TestListFolders(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result.NativeIDs, "formae-integ-test-list-folder")
 }
+
+// --- Contact Point Tests ---
+
+// Grafana stores the secret settings of a contact point encrypted and returns
+// them as the literal "[REDACTED]" on every read path. The properties an update
+// reports must agree with that, so a webhook URL submitted in `settings` is not
+// written back into recorded state.
+func TestUpdateContactPointReportsRedactedSecretSettings(t *testing.T) {
+	skipIfNoGrafana(t)
+	ctx := context.Background()
+	p := &Plugin{}
+
+	const webhookURL = "https://hooks.slack.com/services/T00000000/B00000000/formaeIntegSecret"
+	const uid = "formae-integ-test-cp-secret"
+
+	create := func(recipient string) json.RawMessage {
+		settings, _ := json.Marshal(map[string]any{"url": webhookURL, "recipient": recipient})
+		props, _ := json.Marshal(map[string]any{
+			"uid":              uid,
+			"name":             "Formae Integ Secret CP",
+			"contactPointType": "slack",
+			"settings":         string(settings),
+		})
+		return props
+	}
+
+	_, err := p.Create(ctx, &resource.CreateRequest{
+		ResourceType: "GRAFANA::Alerting::ContactPoint",
+		Label:        "test-cp-secret",
+		Properties:   create("#alerts"),
+		TargetConfig: testTargetConfig(),
+	})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		p.Delete(ctx, &resource.DeleteRequest{
+			NativeID:     uid,
+			ResourceType: "GRAFANA::Alerting::ContactPoint",
+			TargetConfig: testTargetConfig(),
+		})
+	})
+
+	result, err := p.Update(ctx, &resource.UpdateRequest{
+		NativeID:          uid,
+		ResourceType:      "GRAFANA::Alerting::ContactPoint",
+		PriorProperties:   create("#alerts"),
+		DesiredProperties: create("#alerts-changed"),
+		TargetConfig:      testTargetConfig(),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.ProgressResult)
+	require.Equal(t, resource.OperationStatusSuccess, result.ProgressResult.OperationStatus)
+
+	assert.NotContains(t, string(result.ProgressResult.ResourceProperties), webhookURL,
+		"update must not report the plaintext webhook URL in recorded state")
+
+	// The non-secret part of the update must still be reported.
+	assert.Contains(t, string(result.ProgressResult.ResourceProperties), "#alerts-changed")
+}

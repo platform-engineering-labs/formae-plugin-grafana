@@ -186,14 +186,26 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationUpdate, MapAPIError(putErr), fmt.Sprintf("failed to update contact point: %v", putErr)), nil
 	}
 
+	// Report the server's view rather than the settings we just sent. Grafana
+	// stores the secret fields of a contact point encrypted (the Slack `url`,
+	// a PagerDuty `integrationKey`, a webhook `password`) and returns them as
+	// the literal "[REDACTED]" on every read path, so echoing the submitted
+	// settings back would write the plaintext secret into recorded state and
+	// leave it permanently diverged from what Read reports. Create already
+	// passes the API response through for the same reason.
+	//
 	// Always echo `settings` (the canonical persisted shape) regardless of
 	// whether the user submitted via settings or settingsMap. The schema's
 	// hasProviderDefault on `settings` tells the conformance harness this is
 	// the provider-canonical form, so a settingsMap submission with a
 	// settings response is tolerated.
-	out := buildResponseProps(nativeID, p.Name, p.Type, settings, p.DisableResolveMessage)
-	outJSON, _ := json.Marshal(out)
-	return SuccessResult(resource.OperationUpdate, nativeID, outJSON), nil
+	readResult, readErr := h.Read(ctx, client, nativeID)
+	if readErr != nil || readResult == nil || readResult.ErrorCode != "" {
+		out := buildResponseProps(nativeID, p.Name, p.Type, settings, p.DisableResolveMessage)
+		outJSON, _ := json.Marshal(out)
+		return SuccessResult(resource.OperationUpdate, nativeID, outJSON), nil
+	}
+	return SuccessResult(resource.OperationUpdate, nativeID, json.RawMessage(readResult.Properties)), nil
 }
 
 func (h *ContactPointHandler) Delete(ctx context.Context, client *goapi.GrafanaHTTPAPI, nativeID string) (*resource.ProgressResult, error) {
