@@ -14,8 +14,17 @@ class NotificationPolicy extends formae.Resource {
   fixed hidden type: String = "GRAFANA::Alerting::NotificationPolicy"
 
   /// Name of the default contact point (receiver).
+  ///
+  /// Accepts a literal name or a `formae.Resolvable` pointing at a
+  /// ContactPoint's `name`, e.g. `myContactPoint.res.name`. Prefer the
+  /// resolvable: Grafana rejects a policy tree naming a receiver that does not
+  /// exist, and the resolvable is what tells formae to create the contact point
+  /// before this policy and to reset this policy before deleting it.
+  ///
+  /// Receivers named inside `routes` are part of an opaque JSON string and
+  /// therefore carry no dependency edge.
   @formae.FieldHint {}
-  receiver: String
+  receiver: (String|formae.Resolvable)
 
   /// Fields to group alerts by (e.g., ["alertname", "grafana_folder"]).
   /// Provided as a JSON array of strings.

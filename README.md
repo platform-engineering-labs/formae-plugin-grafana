@@ -27,6 +27,31 @@ Manage Grafana instance resources declaratively - dashboards, data sources, fold
 | `GRAFANA::Alerting::MuteTiming` | Time windows for suppressing notifications | `name` |
 | `GRAFANA::Alerting::MessageTemplate` | Go templates for notification formatting | `name` |
 
+A notification policy names the contact point it routes to. Point `receiver` at
+the contact point's `name` resolvable rather than repeating the name as a
+string:
+
+```pkl
+local onCall = new contact_point.ContactPoint {
+  label = "on-call"
+  name = "on-call"
+  contactPointType = "slack"
+  settings = ##"{"url":"https://hooks.slack.com/services/…","recipient":"#alerts"}"##
+}
+onCall  // a `local` binding is not emitted on its own; name it to add it to the forma
+
+new notification_policy.NotificationPolicy {
+  label = "default-routing"
+  receiver = onCall.res.name
+}
+```
+
+Grafana rejects a policy tree that names a receiver which does not exist, so the
+ordering matters. The resolvable is what tells formae to create the contact
+point before the policy, and to reset the policy before deleting the contact
+point on teardown. Receivers named inside `routes` are part of an opaque JSON
+string and carry no such edge.
+
 ## Configuration
 
 ### Target

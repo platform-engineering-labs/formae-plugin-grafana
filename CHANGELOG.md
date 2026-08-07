@@ -10,6 +10,19 @@ formae agent.
 
 ## [Unreleased]
 
+### Added
+
+- `NotificationPolicy.receiver` now accepts a resolvable to a contact point's
+  name (`myContactPoint.res.name`) as well as a literal string, and
+  `ContactPoint` exposes a `res` resolvable to support it. Grafana rejects a
+  policy tree naming a receiver that does not exist, so previously a first apply
+  could send the policy before its contact point existed and fail, and a destroy
+  could delete the contact point before the policy was reset, leaving the tree
+  inconsistent. Using the resolvable makes the dependency explicit, so formae
+  creates the contact point first and resets the policy first on teardown.
+  Receivers named inside `routes` are part of an opaque JSON string and still
+  carry no dependency edge.
+
 ### Fixed
 
 - Updating a contact point no longer records its secret settings in cleartext.
