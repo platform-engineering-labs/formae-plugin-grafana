@@ -36,7 +36,10 @@ local onCall = new contact_point.ContactPoint {
   label = "on-call"
   name = "on-call"
   contactPointType = "slack"
-  settings = ##"{"url":"https://hooks.slack.com/services/…","recipient":"#alerts"}"##
+  settingsMap = new Mapping {
+    ["url"] = "https://hooks.slack.com/services/…"
+    ["recipient"] = "#alerts"
+  }
 }
 onCall  // a `local` binding is not emitted on its own; name it to add it to the forma
 
@@ -51,6 +54,22 @@ ordering matters. The resolvable is what tells formae to create the contact
 point before the policy, and to reset the policy before deleting the contact
 point on teardown. Receivers named inside `routes` are part of an opaque JSON
 string and carry no such edge.
+
+### Contact point settings: use `settingsMap` for secret-bearing values
+
+A contact point's settings can be given as `settingsMap` (a key/value mapping)
+or as `settings` (a JSON string). Use `settingsMap` whenever any value is one
+Grafana treats as a secret, for example a Slack `url` or `token`, a PagerDuty
+`integrationKey`, or a webhook `password`.
+
+Grafana stores those fields encrypted and returns the literal `[REDACTED]` in
+their place on every read. With the `settings` JSON string, the plaintext you
+declared and the `[REDACTED]` Grafana returns occupy the same field, so they
+never compare equal and the contact point reports drift on every sync forever.
+`settingsMap` is a submission-only form that is never read back, so no such
+comparison happens.
+
+For settings with no secret values, either form works.
 
 ## Configuration
 
