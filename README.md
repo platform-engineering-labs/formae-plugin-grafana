@@ -92,14 +92,43 @@ new formae.Target {
 
 ### Credentials
 
-The Grafana target authenticates with one of two methods, in priority order:
+The Grafana target authenticates with one of two methods:
 
-#### 1. `username` and `password` Config fields (recommended)
+#### 1. The `auth` Config block (recommended)
 
-Both fields accept either a literal string or a formae resolvable, so the
-credentials can be sourced from a secret and resolved live at apply time. There
-is no credential in the agent environment, and no agent restart when the
-credential rotates. When both are set they take priority over `GRAFANA_AUTH`.
+`auth` takes one of two strategies, `TokenAuth` or `BasicAuth`. Every credential
+field in them accepts either a literal string or a formae resolvable, so the
+credential can be sourced from a secret and resolved live at apply time. There is
+no credential in the agent environment, and no agent restart when the credential
+rotates.
+
+`TokenAuth` carries a Grafana service account token (or a legacy API key), sent
+as a bearer token. Prefer it: a service account token has a scoped role and can
+be revoked on its own, where the admin password is an instance superuser
+credential shared with the interactive login.
+
+```pkl
+import "@aws/secretsmanager/secret.pkl" as secretmod
+
+// A secret holding the service account token.
+local grafanaToken = new secretmod.Secret {
+  label = "grafana-token"
+  name = "grafana-agent-token"
+}
+
+new formae.Target {
+  label = "my-grafana"
+  namespace = "GRAFANA"
+  config = new grafana.Config {
+    url = "https://grafana.example.com"
+    auth = new grafana.TokenAuth {
+      token = grafanaToken.res.secretValue
+    }
+  }
+}
+```
+
+`BasicAuth` carries a username and password:
 
 ```pkl
 import "@aws/secretsmanager/secret.pkl" as secretmod
@@ -115,22 +144,32 @@ new formae.Target {
   namespace = "GRAFANA"
   config = new grafana.Config {
     url = "https://grafana.example.com"
-    username = grafanaCreds.res.secretValue.json("username")
-    password = grafanaCreds.res.secretValue.json("password")
+    auth = new grafana.BasicAuth {
+      username = grafanaCreds.res.secretValue.json("username")
+      password = grafanaCreds.res.secretValue.json("password")
+    }
   }
 }
 ```
 
-The target config persists only a reference to the secret; the plaintext
-credential never lands in the datastore. Any formae secret works here (for
-example an AWS Secrets Manager secret, an Azure Key Vault secret, or a Kubernetes
-Secret), so the credential can live alongside the infrastructure it protects.
+When a credential is a resolvable, the target config persists only the reference
+to the secret; the plaintext value is resolved per plugin call and never lands in
+the datastore. Any formae secret works here (for example an AWS Secrets Manager
+secret, an Azure Key Vault secret, or a Kubernetes Secret), so the credential can
+live alongside the infrastructure it protects.
+
+A credential written as a **literal string** gets no such protection: it is
+ordinary target configuration and is stored as given. Use a literal only for a
+throwaway local instance, and a resolvable everywhere else.
+
+When `auth` is set it is used as given: `GRAFANA_AUTH` is not consulted, and an
+incomplete block (an empty token, a username without a password) is an error
+rather than a silent fallback, so a broken secret reference cannot quietly
+downgrade the target to whatever credential the agent happens to carry.
 
 #### 2. `GRAFANA_AUTH` environment variable (fallback)
 
-Used when `username` and `password` are not both set. This is the right choice
-for a service account token or API key (the resolvable fields above cover basic
-auth). Supported formats:
+Used when `auth` is not set. Supported formats:
 
 | Format | Example |
 |---|---|

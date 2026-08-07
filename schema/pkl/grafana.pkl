@@ -7,11 +7,15 @@ import "@formae/formae.pkl"
 /// Target configuration for a Grafana instance.
 /// Contains the deployment location and optional credentials.
 ///
-/// Credentials can be supplied in two ways (in priority order):
-///   1. Via `username` and `password` fields (recommended — supports formae secrets via resolvable):
-///        username = someSecret.res.secretValue.json("username")
-///        password = someSecret.res.secretValue.json("password")
-///   2. Via the GRAFANA_AUTH environment variable (fallback):
+/// Credentials can be supplied in two ways:
+///   1. Via the `auth` block (recommended — every credential accepts a
+///      resolvable, so it can be sourced from a formae-managed secret):
+///        auth = new TokenAuth { token = someSecret.res.secretValue }
+///        auth = new BasicAuth {
+///          username = someSecret.res.secretValue.json("username")
+///          password = someSecret.res.secretValue.json("password")
+///        }
+///   2. Via the GRAFANA_AUTH environment variable, used when `auth` is absent:
 ///        GRAFANA_AUTH - Service account token, API key, or "user:password" for basic auth
 ///
 /// The url can be a literal string or a resolvable reference to another resource's
@@ -28,19 +32,56 @@ open class Config {
   /// Optional organization ID. Defaults to the org associated with the auth token.
   hidden orgId: Int?
 
-  /// Optional username for basic auth. When both username and password are set they
-  /// take priority over the GRAFANA_AUTH environment variable. Accepts a literal
-  /// string or a resolvable (e.g. sourced from a formae-managed secret).
-  hidden username: (String|formae.Resolvable)?
-
-  /// Optional password for basic auth. When both username and password are set they
-  /// take priority over the GRAFANA_AUTH environment variable. Accepts a literal
-  /// string or a resolvable (e.g. sourced from a formae-managed secret).
-  hidden password: (String|formae.Resolvable)?
+  /// Authentication strategy. When set it is used as given; the GRAFANA_AUTH
+  /// environment variable is not consulted, and an incomplete block is an error
+  /// rather than a silent fallback. Omit to authenticate with GRAFANA_AUTH.
+  hidden auth: Auth?
 
   fixed Type: String = type
   fixed Url: String|formae.Resolvable = url
   fixed OrgId: Int? = orgId
-  fixed Username: (String|formae.Resolvable)? = username
-  fixed Password: (String|formae.Resolvable)? = password
+  fixed Auth: Auth? = auth
+}
+
+/// Base class for Grafana authentication strategies.
+abstract class Auth {
+  /// Discriminator field for Go-side deserialization.
+  hidden fixed type: String
+  fixed Type: String = type
+}
+
+/// Bearer-token auth: a Grafana service account token (`glsa_…`) or a legacy
+/// API key. Preferred over basic auth, because a service account token carries
+/// a scoped role and can be revoked on its own.
+///
+///   auth = new TokenAuth { token = grafanaToken.res.secretValue }
+class TokenAuth extends Auth {
+  fixed type = "Token"
+
+  /// The service account token or API key. Accepts a literal string or a
+  /// resolvable (e.g. sourced from a formae-managed secret).
+  hidden token: (String|formae.Resolvable)
+
+  fixed Token: (String|formae.Resolvable) = token
+}
+
+/// Basic auth with a Grafana username and password.
+///
+///   auth = new BasicAuth {
+///     username = grafanaCreds.res.secretValue.json("username")
+///     password = grafanaCreds.res.secretValue.json("password")
+///   }
+class BasicAuth extends Auth {
+  fixed type = "Basic"
+
+  /// The Grafana username. Accepts a literal string or a resolvable
+  /// (e.g. sourced from a formae-managed secret).
+  hidden username: (String|formae.Resolvable)
+
+  /// The password for `username`. Accepts a literal string or a resolvable
+  /// (e.g. sourced from a formae-managed secret).
+  hidden password: (String|formae.Resolvable)
+
+  fixed Username: (String|formae.Resolvable) = username
+  fixed Password: (String|formae.Resolvable) = password
 }
