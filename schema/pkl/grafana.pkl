@@ -27,14 +27,28 @@ open class Config {
   hidden fixed type: String = "Grafana"
 
   /// The URL of the Grafana instance. Accepts a literal string or a resolvable.
+  ///
+  /// Deliberately left without a ConfigFieldHint, so it stays immutable and a
+  /// change replaces the target. The URL is where the resources live: two URLs
+  /// are two Grafana databases holding different folders and dashboards, so
+  /// silently updating in place would leave recorded state for objects that do
+  /// not exist at the new address.
   hidden url: String|formae.Resolvable
 
   /// Optional organization ID. Defaults to the org associated with the auth token.
+  @formae.ConfigFieldHint { createOnly = false }
   hidden orgId: Int?
 
   /// Authentication strategy. When set it is used as given; the GRAFANA_AUTH
   /// environment variable is not consulted, and an incomplete block is an error
   /// rather than a silent fallback. Omit to authenticate with GRAFANA_AUTH.
+  ///
+  /// Mutable: how the agent authenticates is not where the resources live, so
+  /// rotating a credential, or moving from GRAFANA_AUTH to an explicit block,
+  /// updates the target rather than replacing it. Without this the change is
+  /// classified immutable and rejected outright, because Grafana resources are
+  /// not portable across targets.
+  @formae.ConfigFieldHint { createOnly = false }
   hidden auth: Auth?
 
   fixed Type: String = type

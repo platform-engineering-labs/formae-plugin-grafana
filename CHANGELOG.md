@@ -24,6 +24,17 @@ formae agent.
   error rather than a silent fallback to the environment. Omitting `auth` keeps
   the existing `GRAFANA_AUTH` behaviour unchanged.
 
+- The target `Config` declares per-field mutability, so `auth` and `orgId` can
+  change on an existing target. Target config fields are immutable unless
+  annotated, which meant any edit to a Grafana target was classified as a
+  replace. Grafana resources are not portable across targets, so the apply was
+  rejected outright with `NonPortableResources`, listing every folder, dashboard
+  and datasource bound to the target. Adopting the `auth` block on a live target
+  was therefore impossible without first destroying all of them. `url` is
+  deliberately still immutable: it is where the resources live, so two URLs are
+  two Grafana databases, and updating in place would leave recorded state for
+  objects that do not exist at the new address.
+
 - `NotificationPolicy.receiver` now accepts a resolvable to a contact point's
   name (`myContactPoint.res.name`) as well as a literal string, and
   `ContactPoint` exposes a `res` resolvable to support it. Grafana rejects a
