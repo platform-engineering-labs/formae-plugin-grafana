@@ -191,6 +191,25 @@ func TestNewClient_BasicAuth_MissingPassword(t *testing.T) {
 	assert.Contains(t, err.Error(), "Password")
 }
 
+// TestNewClient_BasicAuth_MissingUsername verifies that an explicit Basic block
+// with no username is a configuration error rather than a silent fall-through
+// to the environment.
+func TestNewClient_BasicAuth_MissingUsername(t *testing.T) {
+	t.Setenv("GRAFANA_AUTH", "admin:admin")
+
+	cfg := &TargetConfig{
+		Type: "Grafana",
+		URL:  "https://grafana.example.com",
+		Auth: json.RawMessage(`{"Type":"Basic","Password":"secret"}`),
+	}
+	cfg, err := hydrate(cfg)
+	require.NoError(t, err)
+
+	_, err = NewClient(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Username")
+}
+
 // TestNewClient_UnknownAuthType verifies that an unrecognized auth strategy is
 // rejected instead of falling back to the environment.
 func TestNewClient_UnknownAuthType(t *testing.T) {

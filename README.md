@@ -131,25 +131,36 @@ new formae.Target {
 `BasicAuth` carries a username and password:
 
 ```pkl
+import "@aws/secretsmanager/secret.pkl" as secretmod
+
 // A secret holding {"username": "...", "password": "..."} as JSON.
 local grafanaCreds = new secretmod.Secret {
   label = "grafana-admin"
   name = "grafana-admin-creds"
 }
 
-config = new grafana.Config {
-  url = "https://grafana.example.com"
-  auth = new grafana.BasicAuth {
-    username = grafanaCreds.res.secretValue.json("username")
-    password = grafanaCreds.res.secretValue.json("password")
+new formae.Target {
+  label = "my-grafana"
+  namespace = "GRAFANA"
+  config = new grafana.Config {
+    url = "https://grafana.example.com"
+    auth = new grafana.BasicAuth {
+      username = grafanaCreds.res.secretValue.json("username")
+      password = grafanaCreds.res.secretValue.json("password")
+    }
   }
 }
 ```
 
-The target config persists only a reference to the secret; the plaintext
-credential never lands in the datastore. Any formae secret works here (for
-example an AWS Secrets Manager secret, an Azure Key Vault secret, or a Kubernetes
-Secret), so the credential can live alongside the infrastructure it protects.
+When a credential is a resolvable, the target config persists only the reference
+to the secret; the plaintext value is resolved per plugin call and never lands in
+the datastore. Any formae secret works here (for example an AWS Secrets Manager
+secret, an Azure Key Vault secret, or a Kubernetes Secret), so the credential can
+live alongside the infrastructure it protects.
+
+A credential written as a **literal string** gets no such protection: it is
+ordinary target configuration and is stored as given. Use a literal only for a
+throwaway local instance, and a resolvable everywhere else.
 
 When `auth` is set it is used as given: `GRAFANA_AUTH` is not consulted, and an
 incomplete block (an empty token, a username without a password) is an error
