@@ -12,6 +12,18 @@ formae agent.
 
 ### Added
 
+- The Grafana target `Config` takes an `auth` block that selects an
+  authentication strategy: `TokenAuth` for a service account token or API key,
+  `BasicAuth` for a username and password. Every credential field accepts a
+  literal string or a resolvable, so a service account token can now be sourced
+  from a formae-managed secret and resolved live at apply time. Previously only
+  basic auth could be sourced that way, and a token could reach the plugin only
+  through the `GRAFANA_AUTH` environment variable, which forced a target wanting
+  secret-sourced credentials onto instance-superuser admin basic auth. When
+  `auth` is set, `GRAFANA_AUTH` is not consulted and an incomplete block is an
+  error rather than a silent fallback to the environment. Omitting `auth` keeps
+  the existing `GRAFANA_AUTH` behaviour unchanged.
+
 - `NotificationPolicy.receiver` now accepts a resolvable to a contact point's
   name (`myContactPoint.res.name`) as well as a literal string, and
   `ContactPoint` exposes a `res` resolvable to support it. Grafana rejects a
@@ -22,6 +34,13 @@ formae agent.
   creates the contact point first and resets the policy first on teardown.
   Receivers named inside `routes` are part of an opaque JSON string and still
   carry no dependency edge.
+
+### Changed
+
+- The target `Config` fields `username` and `password` are replaced by the
+  `auth` block: write `auth = new grafana.BasicAuth { username = …; password = … }`.
+  The fields existed only in the `0.1.7-dev.0` prerelease, so no released
+  version is affected.
 
 ### Fixed
 
