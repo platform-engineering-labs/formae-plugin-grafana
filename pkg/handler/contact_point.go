@@ -19,56 +19,73 @@ func init() {
 type ContactPointHandler struct{}
 
 type contactPointProps struct {
-	UID                   string            `json:"uid,omitempty"`
-	Name                  string            `json:"name"`
-	Type                  string            `json:"contactPointType"`
-	Settings              string            `json:"settings,omitempty"`
-	SettingsMap           map[string]string `json:"settingsMap,omitempty"`
-	DisableResolveMessage bool              `json:"disableResolveMessage,omitempty"`
+	UID                   string         `json:"uid,omitempty"`
+	Name                  string         `json:"name"`
+	Type                  string         `json:"contactPointType"`
+	Settings              map[string]any `json:"settings,omitempty"`
+	DisableResolveMessage bool           `json:"disableResolveMessage,omitempty"`
 }
 
-// resolveSettings returns the type-specific settings object Grafana expects.
-// `settingsMap` is submission-only sugar that lets each value carry a
-// `formae.Resolvable` for cross-plugin wiring; once the Resolvable substitution
-// runs upstream, the map collapses into the same shape `settings` produces.
-// All persisted state is the JSON-string `settings` form, so Read and Sync see
-// one canonical representation regardless of which form the user submitted.
-// Returns a validation error when both forms are present or both are absent.
-func (p contactPointProps) resolveSettings() (any, error) {
-	hasMap := len(p.SettingsMap) > 0
-	hasString := p.Settings != ""
-	switch {
-	case hasMap && hasString:
-		return nil, fmt.Errorf("set exactly one of settings or settingsMap, not both")
-	case hasMap:
-		out := make(map[string]any, len(p.SettingsMap))
-		for k, v := range p.SettingsMap {
-			out[k] = v
+// redactedSentinel is what Grafana returns in place of an option it classifies
+// as secret: those are stored encrypted and never readable back.
+const redactedSentinel = "[REDACTED]"
+
+// stripRedacted returns v with every key whose value is exactly the redacted
+// sentinel removed, recursing through nested objects and through objects inside
+// arrays. A stripped key is one the plugin declines to report, so formae's
+// property merge keeps the author's declared value while every observable key
+// stays reported and drift-checked individually. An object left empty by
+// stripping is dropped from its parent as well - reporting an empty object no
+// declaration can match would drift on every reconcile - while a sibling that
+// survives stripping is preserved. An object inside an array keeps its
+// position even when stripping empties it, because dropping it would renumber
+// the elements around it. Only an exact match is a redacted secret: a value
+// that merely contains the sentinel (an alert message quoting it) is an
+// observable value and stays.
+func stripRedacted(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		cleaned := make(map[string]any, len(val))
+		for k, item := range val {
+			if s, ok := item.(string); ok && s == redactedSentinel {
+				continue
+			}
+			stripped := stripRedacted(item)
+			if m, ok := stripped.(map[string]any); ok && len(m) == 0 {
+				continue
+			}
+			cleaned[k] = stripped
 		}
-		return out, nil
-	case hasString:
-		var v any
-		if err := json.Unmarshal([]byte(p.Settings), &v); err != nil {
-			return nil, fmt.Errorf("invalid settings JSON: %v", err)
+		return cleaned
+	case []any:
+		cleaned := make([]any, len(val))
+		for i, item := range val {
+			cleaned[i] = stripRedacted(item)
 		}
-		return v, nil
+		return cleaned
 	default:
-		return nil, fmt.Errorf("one of settings or settingsMap is required")
+		return v
 	}
 }
 
-// buildResponseProps assembles the Properties payload that round-trips back to
-// formae. `settings` is the canonical persisted shape - even when the user
-// submitted via `settingsMap`. The schema marks `settings` as
-// hasProviderDefault so the conformance harness tolerates its appearance in
-// actual when only `settingsMap` was declared in source.
-func buildResponseProps(uid, name, cpType string, settings any, disableResolveMessage bool) contactPointProps {
-	settingsJSON, _ := json.Marshal(settings)
+// contactPointResponseProps assembles the Properties payload that round-trips
+// back to formae, reporting settings as the server's view minus every redacted
+// key.
+//
+// A contact point whose every option is secret - a Slack one declaring only
+// `url`, a PagerDuty one declaring only `integrationKey` - strips down to an
+// empty object, and the omitempty on Settings then leaves it out of the
+// payload entirely. That is what makes the merge keep the declared values:
+// reporting an empty settings object instead would drift on every reconcile.
+func contactPointResponseProps(uid, name, cpType string, settings any, disableResolveMessage bool) contactPointProps {
+	// A server view that is not an object leaves settings unreported, which is
+	// the safe direction: the merge then keeps what the author declared.
+	reported, _ := stripRedacted(settings).(map[string]any)
 	return contactPointProps{
 		UID:                   uid,
 		Name:                  name,
 		Type:                  cpType,
-		Settings:              string(settingsJSON),
+		Settings:              reported,
 		DisableResolveMessage: disableResolveMessage,
 	}
 }
@@ -79,15 +96,10 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	settings, err := p.resolveSettings()
-	if err != nil {
-		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
-	}
-
 	cp := &models.EmbeddedContactPoint{
 		Name:                  p.Name,
 		Type:                  strPtr(p.Type),
-		Settings:              settings,
+		Settings:              p.Settings,
 		DisableResolveMessage: p.DisableResolveMessage,
 	}
 	if p.UID != "" {
@@ -110,9 +122,20 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 		cpType = *created.Type
 	}
 
-	out := buildResponseProps(created.UID, created.Name, cpType, created.Settings, created.DisableResolveMessage)
-	outJSON, _ := json.Marshal(out)
-	return SuccessResult(resource.OperationCreate, created.UID, outJSON), nil
+	// Report the server's read view rather than the write reply. The reply
+	// flattens a nested redacted secret into a dotted sibling key
+	// ("hmacConfig.secret" beside "hmacConfig"), a shape no later read ever
+	// returns, so recording it would leave state permanently diverged.
+	readResult, readErr := h.Read(ctx, client, created.UID)
+	if readErr != nil || readResult == nil || readResult.ErrorCode != "" {
+		// The contact point already exists by now, so a failing read-back must
+		// not fail the create: that would orphan it and invite a colliding
+		// retry. Report the write response through the same stripping instead.
+		out := contactPointResponseProps(created.UID, created.Name, cpType, created.Settings, created.DisableResolveMessage)
+		outJSON, _ := json.Marshal(out)
+		return SuccessResult(resource.OperationCreate, created.UID, outJSON), nil
+	}
+	return SuccessResult(resource.OperationCreate, created.UID, json.RawMessage(readResult.Properties)), nil
 }
 
 func (h *ContactPointHandler) Read(ctx context.Context, client *goapi.GrafanaHTTPAPI, nativeID string) (*resource.ReadResult, error) {
@@ -130,18 +153,11 @@ func (h *ContactPointHandler) Read(ctx context.Context, client *goapi.GrafanaHTT
 
 	for _, cp := range resp.GetPayload() {
 		if cp.UID == nativeID {
-			settingsJSON, _ := json.Marshal(cp.Settings)
 			cpType := ""
 			if cp.Type != nil {
 				cpType = *cp.Type
 			}
-			out := contactPointProps{
-				UID:                   cp.UID,
-				Name:                  cp.Name,
-				Type:                  cpType,
-				Settings:              string(settingsJSON),
-				DisableResolveMessage: cp.DisableResolveMessage,
-			}
+			out := contactPointResponseProps(cp.UID, cp.Name, cpType, cp.Settings, cp.DisableResolveMessage)
 			outJSON, _ := json.Marshal(out)
 			return &resource.ReadResult{
 				ResourceType: "GRAFANA::Alerting::ContactPoint",
@@ -162,16 +178,11 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
 	}
 
-	settings, err := p.resolveSettings()
-	if err != nil {
-		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
-	}
-
 	cp := &models.EmbeddedContactPoint{
 		UID:                   nativeID,
 		Name:                  p.Name,
 		Type:                  strPtr(p.Type),
-		Settings:              settings,
+		Settings:              p.Settings,
 		DisableResolveMessage: p.DisableResolveMessage,
 	}
 
@@ -187,21 +198,18 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 	}
 
 	// Report the server's view rather than the settings we just sent. Grafana
-	// stores the secret fields of a contact point encrypted (the Slack `url`,
+	// stores the secret options of a contact point encrypted (the Slack `url`,
 	// a PagerDuty `integrationKey`, a webhook `password`) and returns them as
 	// the literal "[REDACTED]" on every read path, so echoing the submitted
 	// settings back would write the plaintext secret into recorded state and
-	// leave it permanently diverged from what Read reports. Create already
-	// passes the API response through for the same reason.
+	// leave it permanently diverged from what Read reports. Create reports via
+	// Read for the same reason.
 	//
-	// Always echo `settings` (the canonical persisted shape) regardless of
-	// whether the user submitted via settings or settingsMap. The schema's
-	// hasProviderDefault on `settings` tells the conformance harness this is
-	// the provider-canonical form, so a settingsMap submission with a
-	// settings response is tolerated.
+	// The contact point is already updated by now, so a failing read-back must
+	// not fail the update: it reports the submitted properties instead.
 	readResult, readErr := h.Read(ctx, client, nativeID)
 	if readErr != nil || readResult == nil || readResult.ErrorCode != "" {
-		out := buildResponseProps(nativeID, p.Name, p.Type, settings, p.DisableResolveMessage)
+		out := contactPointResponseProps(nativeID, p.Name, p.Type, p.Settings, p.DisableResolveMessage)
 		outJSON, _ := json.Marshal(out)
 		return SuccessResult(resource.OperationUpdate, nativeID, outJSON), nil
 	}
