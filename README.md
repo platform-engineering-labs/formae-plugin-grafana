@@ -36,9 +36,9 @@ local onCall = new contact_point.ContactPoint {
   label = "on-call"
   name = "on-call"
   contactPointType = "slack"
-  settingsMap = new Mapping {
-    ["url"] = "https://hooks.slack.com/services/…"
-    ["recipient"] = "#alerts"
+  settings = new {
+    url = "https://hooks.slack.com/services/…"
+    recipient = "#alerts"
   }
 }
 onCall  // a `local` binding is not emitted on its own; name it to add it to the forma
@@ -55,21 +55,90 @@ point before the policy, and to reset the policy before deleting the contact
 point on teardown. Receivers named inside `routes` are part of an opaque JSON
 string and carry no such edge.
 
-### Contact point settings: use `settingsMap` for secret-bearing values
+### Contact point settings
 
-A contact point's settings can be given as `settingsMap` (a key/value mapping)
-or as `settings` (a JSON string). Use `settingsMap` whenever any value is one
-Grafana treats as a secret, for example a Slack `url` or `token`, a PagerDuty
-`integrationKey`, or a webhook `password`.
+A contact point's settings are a single typed `settings` object whose keys are
+the options the declared `contactPointType` accepts:
 
-Grafana stores those fields encrypted and returns the literal `[REDACTED]` in
-their place on every read. With the `settings` JSON string, the plaintext you
-declared and the `[REDACTED]` Grafana returns occupy the same field, so they
-never compare equal and the contact point reports drift on every sync forever.
-`settingsMap` is a submission-only form that is never read back, so no such
-comparison happens.
+```pkl
+new contact_point.ContactPoint {
+  label = "slack-alerts"
+  name = "Slack Alerts"
+  contactPointType = "slack"
+  settings = new {
+    url = "https://hooks.slack.com/services/xxx/yyy/zzz"
+    recipient = "#alerts"
+  }
+}
+```
 
-For settings with no secret values, either form works.
+The vocabulary comes from Grafana's own notifier metadata, so every option any
+notifier type declares is available as a property. Nested blocks (a webhook's
+`http_config.oauth2.tls_config`, an OpsGenie `responders` entry) are typed
+objects of their own, and every free-text option accepts a `formae.Resolvable`,
+so a setting can flow in from another resource - even one managed by a
+different plugin - in a single apply:
+
+```pkl
+settings = new {
+  integrationKey = pdIntegration.res.integrationKey
+  severity = "critical"
+}
+```
+
+A key no notifier declares - a misspelled one - is a Pkl type error, caught
+before the forma reaches the agent. A key that belongs to a *different*
+notifier type than the one declared still evaluates, and the plugin rejects it
+when the contact point is submitted, naming the key and the notifier type that
+does not accept it. Nothing is written in that case, which matters because
+Grafana stores and echoes back any key it is given: an unrejected
+wrong-for-type key would sit in the contact point doing nothing, and never be
+reported as drift.
+
+#### Secret options
+
+Options Grafana classifies as secret - a Slack `url` or `token`, a PagerDuty
+`integrationKey`, a webhook `password` - additionally accept a
+`formae.SecretValue` and are hashed at rest. The classification is Grafana's
+own, taken from its notifier metadata rather than from a list this plugin
+keeps. Such an option can be given at either of two grades:
+
+- A **reference** (`password = mySecret.res.secretValue`) keeps the plaintext
+  out of formae's state entirely: state holds the reference, the value is
+  resolved per apply, and `formae extract` returns the reference rather than a
+  value.
+- A **literal** (`password = "hunter2"`) persists as a digest. The plaintext
+  still sits in your forma, so prefer a reference anywhere but a throwaway
+  local instance.
+
+Grafana stores a secret-classified option encrypted and returns the literal
+`[REDACTED]` in its place on every read path. The plugin declines to report a
+value it cannot observe, so formae keeps the value you declared rather than
+recording the sentinel, and the contact point does not drift on every sync.
+
+That is a deliberate **loss of observability**, not a guarantee that such a
+secret never drifts. Because nothing is ever read back for the option, formae
+cannot tell whether the secret in Grafana was rotated, replaced or removed out
+of band: the divergence is invisible, not absent. Reconciling a suspected
+divergence therefore means re-applying the declared value, not syncing
+Grafana's. Every non-secret option is reported as Grafana holds it and
+drift-checked individually, so an out-of-band edit to one of those is still
+reported as a change to that key alone.
+
+The classification is per option name rather than per notifier type, because
+that is how Grafana's metadata reads: `url` is secret-classified everywhere
+since some types mark it secure. Grafana redacts it only for those types, so a
+webhook's `url` comes back in full and stays drift-checked normally.
+
+#### A closed vocabulary
+
+The `settings` type is generated from the notifier metadata of the Grafana the
+plugin was built against, so the set of authorable options is closed. An option
+added by a newer Grafana cannot be authored until the schema is regenerated and
+the plugin republished: the forma fails to evaluate rather than reaching a
+Grafana that would have accepted the option. An escape hatch for options newer
+than the schema was considered and deliberately deferred - it would reopen the
+type, and with it the misspelling check that closing it buys.
 
 ## Configuration
 

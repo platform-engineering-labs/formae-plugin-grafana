@@ -1,0 +1,200 @@
+/// Typed settings blocks for a Grafana contact point, one property per
+/// option the notifier metadata declares.
+///
+/// Generated from `internal/notifiers/alert-notifiers.json` - DO NOT EDIT.
+/// Refresh with `make generate`.
+module alerting.generated.contact_point_settings
+
+import "@formae/formae.pkl"
+
+/// Nested settings block declared by the `hmacConfig` option.
+@formae.SubResourceHint {}
+open class HmacConfig extends formae.SubResource {
+  header: (String|formae.Resolvable)?
+  secret: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  timestampHeader: (String|formae.Resolvable)?
+}
+
+/// Nested settings block declared by the `payload` option.
+@formae.SubResourceHint {}
+open class Payload extends formae.SubResource {
+  template: (String|formae.Resolvable)?
+  vars: Mapping<String, String>?
+}
+
+/// Nested settings block declared by the `proxy_config` option.
+@formae.SubResourceHint {}
+open class ProxyConfig extends formae.SubResource {
+  no_proxy: (String|formae.Resolvable)?
+  proxy_connect_header: Mapping<String, String>?
+  proxy_from_environment: Boolean?
+  proxy_url: (String|formae.Resolvable)?
+}
+
+/// Nested settings block declared by the `responders` option.
+@formae.SubResourceHint {}
+open class Responders extends formae.SubResource {
+  id: (String|formae.Resolvable)?
+  name: (String|formae.Resolvable)?
+  type: (String|formae.Resolvable)?
+  username: (String|formae.Resolvable)?
+}
+
+/// Nested settings block declared by the `sigv4` option.
+@formae.SubResourceHint {}
+open class Sigv4 extends formae.SubResource {
+  access_key: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  profile: (String|formae.Resolvable)?
+  region: (String|formae.Resolvable)?
+  role_arn: (String|formae.Resolvable)?
+  secret_key: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+}
+
+/// Nested settings block declared by the `tlsConfig` and `tls_config` options.
+@formae.SubResourceHint {}
+open class TlsConfig extends formae.SubResource {
+  caCertificate: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  clientCertificate: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  clientKey: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  insecureSkipVerify: Boolean?
+}
+
+/// Nested settings block declared by the `oauth2` option.
+@formae.SubResourceHint {}
+open class Oauth2 extends formae.SubResource {
+  client_id: (String|formae.Resolvable)?
+  client_secret: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  endpoint_params: Mapping<String, String>?
+  proxy_config: ProxyConfig?
+  scopes: Listing<String>?
+  tls_config: TlsConfig?
+  token_url: (String|formae.Resolvable)?
+}
+
+/// Nested settings block declared by the `http_config` option.
+@formae.SubResourceHint {}
+open class HttpConfig extends formae.SubResource {
+  oauth2: Oauth2?
+}
+
+/// A contact point's type-specific settings. Every option any notifier
+/// type declares is present as an optional property, so an option no
+/// notifier declares - a misspelled key - is a Pkl type error. An option
+/// that belongs to a different notifier type than the one declared still
+/// evaluates here; the plugin rejects it when the contact point is
+/// submitted.
+@formae.SubResourceHint {}
+open class ContactPointSettings extends formae.SubResource {
+  addresses: (String|formae.Resolvable)?
+  agent_id: (String|formae.Resolvable)?
+  apiKey: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  apiToken: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  apiUrl: (String|formae.Resolvable)?
+  apiVersion: (String|formae.Resolvable)?
+  api_secret: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  api_token: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  api_url: (String|formae.Resolvable)?
+  apikey: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  attributes: Mapping<String, String>?
+  authorization_credentials: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  authorization_scheme: (String|formae.Resolvable)?
+  autoClose: Boolean?
+  avatar_url: (String|formae.Resolvable)?
+  basicAuthPassword: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  basicAuthUser: (String|formae.Resolvable)?
+  bot_token: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  bottoken: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  brokerUrl: (String|formae.Resolvable)?
+  chatid: (String|formae.Resolvable)?
+  check: (String|formae.Resolvable)?
+  `class`: (String|formae.Resolvable)?
+  client: (String|formae.Resolvable)?
+  clientId: (String|formae.Resolvable)?
+  client_url: (String|formae.Resolvable)?
+  color: (String|formae.Resolvable)?
+  component: (String|formae.Resolvable)?
+  corp_id: (String|formae.Resolvable)?
+  dedup_key_field: (String|formae.Resolvable)?
+  description: (String|formae.Resolvable)?
+  details: (String|Mapping<String, String>)?
+  device: (String|formae.Resolvable)?
+  disable_notification: Boolean?
+  disable_web_page_preview: Boolean?
+  endpointUrl: (String|formae.Resolvable)?
+  entity: (String|formae.Resolvable)?
+  expire: (String|formae.Resolvable)?
+  fields: Mapping<String, String>?
+  footer: (String|formae.Resolvable)?
+  gateway_id: (String|formae.Resolvable)?
+  group: (String|formae.Resolvable)?
+  handler: (String|formae.Resolvable)?
+  headers: Mapping<String, String>?
+  hide_open_button: Boolean?
+  hide_version_info: Boolean?
+  hmacConfig: HmacConfig?
+  httpMethod: (String|formae.Resolvable)?
+  http_config: HttpConfig?
+  icon_emoji: (String|formae.Resolvable)?
+  icon_url: (String|formae.Resolvable)?
+  integrationKey: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  issue_type: (String|formae.Resolvable)?
+  kafkaClusterId: (String|formae.Resolvable)?
+  kafkaRestProxy: (String|formae.Resolvable)?
+  kafkaTopic: (String|formae.Resolvable)?
+  labels: Listing<String>?
+  maxAlerts: (String|formae.Resolvable)?
+  mentionChannel: (String|formae.Resolvable)?
+  mentionGroups: (String|formae.Resolvable)?
+  mentionUsers: (String|formae.Resolvable)?
+  message: (String|formae.Resolvable)?
+  messageFormat: (String|formae.Resolvable)?
+  messageType: (String|formae.Resolvable)?
+  message_thread_id: (String|formae.Resolvable)?
+  msgType: (String|formae.Resolvable)?
+  msgtype: (String|formae.Resolvable)?
+  namespace: (String|formae.Resolvable)?
+  okPriority: (String|formae.Resolvable)?
+  okSound: (String|formae.Resolvable)?
+  overridePriority: Boolean?
+  parse_mode: (String|formae.Resolvable)?
+  password: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  payload: Payload?
+  phone_number: (String|formae.Resolvable)?
+  priority: (String|formae.Resolvable)?
+  project: (String|formae.Resolvable)?
+  protect_content: Boolean?
+  qos: (String|formae.Resolvable)?
+  recipient: (String|formae.Resolvable)?
+  recipient_id: (String|formae.Resolvable)?
+  reopen_duration: (String|formae.Resolvable)?
+  reopen_transition: (String|formae.Resolvable)?
+  resolve_transition: (String|formae.Resolvable)?
+  responders: Listing<Responders>?
+  retain: Boolean?
+  retry: (String|formae.Resolvable)?
+  room_id: (String|formae.Resolvable)?
+  secret: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  sectiontitle: (String|formae.Resolvable)?
+  sendTagsAs: (String|formae.Resolvable)?
+  severity: (String|formae.Resolvable)?
+  sigv4: Sigv4?
+  singleEmail: Boolean?
+  sound: (String|formae.Resolvable)?
+  source: (String|formae.Resolvable)?
+  subject: (String|formae.Resolvable)?
+  summary: (String|formae.Resolvable)?
+  target_arn: (String|formae.Resolvable)?
+  text: (String|formae.Resolvable)?
+  title: (String|formae.Resolvable)?
+  tlsConfig: TlsConfig?
+  token: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  topic: (String|formae.Resolvable)?
+  topic_arn: (String|formae.Resolvable)?
+  touser: (String|formae.Resolvable)?
+  url: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  use_discord_username: Boolean?
+  user: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  userKey: (String|formae.Value|formae.SecretValue|formae.Resolvable)?
+  username: (String|formae.Resolvable)?
+  wont_fix_resolution: (String|formae.Resolvable)?
+}

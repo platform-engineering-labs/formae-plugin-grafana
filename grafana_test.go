@@ -273,12 +273,11 @@ func TestUpdateContactPointReportsRedactedSecretSettings(t *testing.T) {
 	const uid = "formae-integ-test-cp-secret"
 
 	create := func(recipient string) json.RawMessage {
-		settings, _ := json.Marshal(map[string]any{"url": webhookURL, "recipient": recipient})
 		props, _ := json.Marshal(map[string]any{
 			"uid":              uid,
 			"name":             "Formae Integ Secret CP",
 			"contactPointType": "slack",
-			"settings":         string(settings),
+			"settings":         map[string]any{"url": webhookURL, "recipient": recipient},
 		})
 		return props
 	}

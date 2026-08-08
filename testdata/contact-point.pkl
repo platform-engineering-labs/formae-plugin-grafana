@@ -1,3 +1,14 @@
+/*
+ * Conformance: the round-trip guard. `email` declares no secret-classified
+ * option, so nothing here is hashed at rest and the harness re-applies the
+ * forma that Extract produced. Every other contact point case carries a
+ * secret-classified option and is skipped for that check, because re-applying
+ * a hashed value is refused at the plugin write boundary by design.
+ *
+ * Keep this case secret-free: adding a secret-classified option - a `url`, a
+ * `token`, a `password` - would silently drop the only Extract re-apply
+ * coverage a contact point has.
+ */
 amends "@formae/forma.pkl"
 import "@formae/formae.pkl"
 import "@grafana/alerting/contact_point.pkl"
@@ -25,6 +36,9 @@ forma {
     uid = "formae-test-\(testRunID)"
     name = "Formae Test ContactPoint \(testRunID)"
     contactPointType = "email"
-    settings = #"{"addresses":"formae-test@example.com","singleEmail":true}"#
+    settings = new {
+      addresses = "formae-test@example.com"
+      singleEmail = true
+    }
   }
 }

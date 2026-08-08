@@ -22,7 +22,7 @@ BINARY := $(PLUGIN_NAME)
 PLUGIN_BASE_DIR := $(HOME)/.pel/formae/plugins
 INSTALL_DIR := $(PLUGIN_BASE_DIR)/$(PLUGIN_NAME)/v$(PLUGIN_VERSION)
 
-.PHONY: all build test test-unit test-integration lint verify-schema clean install help clean-environment test-env-up test-env-down conformance-test conformance-test-crud conformance-test-discovery conformance-test-crud-run conformance-test-discovery-run
+.PHONY: all build generate test test-unit test-integration lint verify-schema clean install help clean-environment test-env-up test-env-down conformance-test conformance-test-crud conformance-test-discovery conformance-test-crud-run conformance-test-discovery-run
 
 all: build
 
@@ -43,6 +43,11 @@ build:
 	else \
 		echo "Keeping declared minFormaeVersion=$$DECLARED (sdk=$$SDK_MIN, never downgrade below declared)"; \
 	fi
+
+## generate: Regenerate the contact point settings PKL type from the notifier snapshot
+## Rerun after refreshing internal/notifiers/alert-notifiers.json; commit the diff.
+generate:
+	$(GO) run ./internal/notifiers/gen
 
 ## test: Run all tests
 test:
