@@ -10,6 +10,48 @@ formae agent.
 
 ## [Unreleased]
 
+### Breaking
+
+- `ContactPoint.settings` changed type and `ContactPoint.settingsMap` was
+  removed. Settings are now a single typed object whose keys are the options the
+  declared `contactPointType` accepts, replacing both the JSON string and the
+  key/value mapping that sat beside it:
+
+    ```pkl
+    // Before
+    new contact_point.ContactPoint {
+      label = "slack-alerts"
+      name = "Slack Alerts"
+      contactPointType = "slack"
+      settingsMap = new Mapping {
+        ["url"] = "https://hooks.slack.com/services/xxx/yyy/zzz"
+        ["recipient"] = "#alerts"
+      }
+    }
+
+    // After
+    new contact_point.ContactPoint {
+      label = "slack-alerts"
+      name = "Slack Alerts"
+      contactPointType = "slack"
+      settings = new {
+        url = "https://hooks.slack.com/services/xxx/yyy/zzz"
+        recipient = "#alerts"
+      }
+    }
+    ```
+
+    A forma written against either previous form no longer evaluates and must be
+    rewritten. The two existed to work around each other: the JSON string
+    reported drift forever once a value was one Grafana redacts, and the mapping
+    avoided that only by never being read back at all. The typed object replaces
+    both - option names and nesting are checked when the forma evaluates, a
+    resolvable is accepted wherever a free-text option is, options Grafana
+    classifies as secret are hashed at rest and left unreported, and every other
+    option is reported and drift-checked individually. Because a secret option is
+    never read back, a secret rotated or removed outside formae stays invisible;
+    reconciling a suspected divergence means re-applying rather than syncing.
+
 ### Added
 
 - The Grafana target `Config` takes an `auth` block that selects an

@@ -28,16 +28,16 @@ forma {
     title = "Alerts"
   }
 
-  // The Slack `url` is a webhook, which Grafana stores encrypted and reads back
-  // as "[REDACTED]". Declare secret-bearing settings through `settingsMap`, not
-  // the `settings` JSON string, or the contact point drifts on every sync.
+  // The Slack `url` is one of the options Grafana classifies as secret, so it
+  // is hashed at rest. A literal is fine for an example; point it at a secret's
+  // resolvable to keep the plaintext out of the forma as well.
   new contact_point.ContactPoint {
     label = "slack-alerts"
     name = "Slack Alerts"
     contactPointType = "slack"
-    settingsMap = new Mapping {
-      ["url"] = "https://hooks.slack.com/services/xxx/yyy/zzz"
-      ["recipient"] = "#alerts"
+    settings = new {
+      url = "https://hooks.slack.com/services/xxx/yyy/zzz"
+      recipient = "#alerts"
     }
   }
 
