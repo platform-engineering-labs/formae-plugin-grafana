@@ -1,0 +1,65 @@
+/*
+ * Conformance: a webhook contact point exercising the full shape of the typed
+ * settings object - a checkbox boolean, a numeric-valued string, nested
+ * subform blocks two levels deep, secret-classified options at two depths, and
+ * a Resolvable bound into a setting (`title` carries the folder's uid, which
+ * the DAG resolves at apply time).
+ *
+ * It carries secret-classified options, so it is skipped for the Extract
+ * re-apply check; contact-point.pkl is the round-trip guard.
+ */
+amends "@formae/forma.pkl"
+import "@formae/formae.pkl"
+import "@grafana/core/folder.pkl"
+import "@grafana/alerting/contact_point.pkl"
+
+local testRunID = read("env:FORMAE_TEST_RUN_ID")
+local stackName = "plugin-sdk-test-stack"
+
+forma {
+  new formae.Stack {
+    label = stackName
+    description = "Plugin SDK conformance test stack"
+  }
+
+  new formae.Target {
+    label = "grafana-target"
+    namespace = "GRAFANA"
+    config = new Mapping {
+      ["Type"] = "Grafana"
+      ["Url"] = read("env:GRAFANA_URL")
+    }
+  }
+
+  local testFolder = new folder.Folder {
+    label = "test-webhook-folder"
+    uid = "formae-test-webhookfolder-\(testRunID)"
+    title = "Formae Webhook Test Folder \(testRunID)"
+  }
+  testFolder
+
+  new contact_point.ContactPoint {
+    label = "test-contact-point-webhook"
+    uid = "formae-test-webhook-\(testRunID)"
+    name = "Formae Test Webhook \(testRunID)"
+    contactPointType = "webhook"
+    settings = new {
+      url = "https://example.com/formae-conformance"
+      httpMethod = "POST"
+      maxAlerts = "10"
+      title = testFolder.res.uid
+      username = "formae-test"
+      password = "formae-test-password"
+      tlsConfig = new {
+        insecureSkipVerify = true
+      }
+      http_config = new {
+        oauth2 = new {
+          token_url = "https://example.com/oauth2/token"
+          client_id = "formae-test-client"
+          client_secret = "formae-test-client-secret"
+        }
+      }
+    }
+  }
+}
