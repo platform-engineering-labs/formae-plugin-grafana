@@ -44,9 +44,11 @@ class ContactPoint extends formae.Resource {
 
   /// Type-specific settings: one typed object whose keys are the options the
   /// declared `contactPointType` accepts. Every option any notifier type
-  /// declares is available as an optional property, so a key Grafana would
-  /// ignore is a Pkl type error rather than a setting silently dropped on
-  /// submission. Nested blocks (a webhook's `http_config.oauth2.tls_config`,
+  /// declares is available as an optional property, so an option no notifier
+  /// declares - a misspelled key - is a Pkl type error. An option that belongs
+  /// to a different notifier type than the one declared still evaluates here;
+  /// the plugin rejects it when the contact point is submitted.
+  /// Nested blocks (a webhook's `http_config.oauth2.tls_config`,
   /// an OpsGenie `responders` entry) are typed objects of their own, and every
   /// free-text option accepts a `formae.Resolvable`, which lets cross-plugin
   /// wiring stay in a single apply:
@@ -60,10 +62,13 @@ class ContactPoint extends formae.Resource {
   /// PagerDuty `integrationKey`, a webhook `password` - additionally accept a
   /// `formae.SecretValue`. Those are hashed at rest and never read back:
   /// Grafana stores them encrypted and returns the literal `[REDACTED]` on
-  /// every read, so they are excluded from drift detection rather than
-  /// compared against a value that can never match. Every non-secret key is
-  /// drift-checked individually, so an out-of-band edit to one setting is
-  /// reported as a change to that key alone.
+  /// every read, so the plugin declines to report a value it cannot observe
+  /// and formae keeps the declared one. That is a deliberate loss of
+  /// observability - a secret rotated, replaced or removed outside formae
+  /// cannot be detected, so reconciling a suspected divergence means
+  /// re-applying the declared value rather than syncing Grafana's. Every
+  /// non-secret key is drift-checked individually, so an out-of-band edit to
+  /// one setting is reported as a change to that key alone.
   @formae.FieldHint {}
   settings: contact_point_settings.ContactPointSettings?
 

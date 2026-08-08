@@ -3,6 +3,7 @@ package notifiers
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -61,6 +62,23 @@ var pklKeywords = map[string]struct{}{
 	"override": {}, "protected": {}, "read": {}, "record": {}, "super": {},
 	"switch": {}, "this": {}, "throw": {}, "trace": {}, "true": {},
 	"typealias": {}, "vararg": {}, "when": {},
+}
+
+// pklIdentifier matches the names the generator may write into Pkl. A property
+// name outside it either fails to parse or, backtick-quoted, no longer
+// serializes to Grafana's own key; a class name outside it fails to parse.
+var pklIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// pklBuiltinTypes names the types Pkl declares itself. A generated class taking
+// one of these names shadows it for the whole module, which the module is still
+// free to evaluate with - so unlike a malformed name it is not caught at parse
+// time and has to be rejected here.
+var pklBuiltinTypes = map[string]struct{}{
+	"Any": {}, "Boolean": {}, "Class": {}, "Collection": {}, "DataSize": {},
+	"Duration": {}, "Dynamic": {}, "Float": {}, "Int": {}, "List": {},
+	"Listing": {}, "Map": {}, "Mapping": {}, "Module": {}, "Null": {},
+	"Number": {}, "Object": {}, "Pair": {}, "Regex": {}, "Resource": {},
+	"Set": {}, "String": {}, "Typed": {},
 }
 
 // pklProperty is one property of a generated class: the Grafana option name,
@@ -123,7 +141,47 @@ func settingsClasses(ns []Notifier) ([]pklClass, error) {
 	for _, name := range topLevelNames(ns) {
 		settings.props = append(settings.props, pklProperty{name: name, typ: types[name]})
 	}
+
+	if err := validateNames(classes, settings); err != nil {
+		return nil, err
+	}
 	return append(classes, settings), nil
+}
+
+// validateNames rejects a name the generated module cannot carry: a property or
+// class name Pkl will not accept as an identifier, and a class name that either
+// collides with the settings class or shadows a Pkl builtin type.
+func validateNames(subforms []pklClass, settings pklClass) error {
+	for _, cls := range subforms {
+		source := cls.sources[0]
+		if !pklIdentifier.MatchString(cls.name) {
+			return fmt.Errorf("notifiers: subform option %q generates class name %q, which is not a valid Pkl identifier", source, cls.name)
+		}
+		if cls.name == settingsClassName {
+			return fmt.Errorf("notifiers: subform option %q generates a class named %s, which collides with the settings class", source, cls.name)
+		}
+		if _, builtin := pklBuiltinTypes[cls.name]; builtin {
+			return fmt.Errorf("notifiers: subform option %q generates a class named %s, which shadows the Pkl builtin type of that name", source, cls.name)
+		}
+	}
+	for _, cls := range subforms {
+		if err := validateProperties(cls); err != nil {
+			return err
+		}
+	}
+	return validateProperties(settings)
+}
+
+// validateProperties rejects a class property whose name Pkl will not accept as
+// an identifier. The name is checked unquoted: a keyword is emitted
+// backtick-quoted, which is a valid identifier either way.
+func validateProperties(cls pklClass) error {
+	for _, p := range cls.props {
+		if !pklIdentifier.MatchString(p.name) {
+			return fmt.Errorf("notifiers: option %q is not a valid Pkl identifier", p.name)
+		}
+	}
+	return nil
 }
 
 // optionShapes indexes every option name in a notifier vocabulary by the form
@@ -141,9 +199,10 @@ func newOptionShapes() *optionShapes {
 }
 
 // collect walks a field tree, recording each option's element and, for a
-// subform option, its field list. It rejects a subform whose field shape
-// disagrees with an earlier occurrence of the same option name, and a subform
-// option marked secure, neither of which the generator can type.
+// subform option, its field list. It rejects nested fields hanging off a
+// non-subform element, a subform whose field shape disagrees with an earlier
+// occurrence of the same option name, and a subform option marked secure, none
+// of which the generator can type.
 func (s *optionShapes) collect(fields []Field, secrets map[string]struct{}) error {
 	for _, f := range fields {
 		if s.elements[f.PropertyName] == nil {
@@ -153,6 +212,9 @@ func (s *optionShapes) collect(fields []Field, secrets map[string]struct{}) erro
 
 		if len(f.SubformOptions) == 0 {
 			continue
+		}
+		if !isSubformElement(f.Element) {
+			return fmt.Errorf("notifiers: option %q carries subform options with element %q, so its generated class is one nothing references", f.PropertyName, f.Element)
 		}
 		if _, secret := secrets[f.PropertyName]; secret {
 			return fmt.Errorf("notifiers: subform option %q is marked secure, which has no generated typing", f.PropertyName)
@@ -180,6 +242,9 @@ func (s *optionShapes) types(secrets map[string]struct{}) (map[string]string, er
 		elements := slices.Sorted(maps.Keys(s.elements[name]))
 		var candidates []string
 		for _, element := range elements {
+			if _, shaped := s.subforms[name]; isSubformElement(element) && !shaped {
+				return nil, fmt.Errorf("notifiers: option %q has element %q but no subform options, so the class it refers to is never declared", name, element)
+			}
 			typ, err := optionType(name, element, secret)
 			if err != nil {
 				return nil, err
@@ -230,6 +295,12 @@ func (s *optionShapes) subformClasses(types map[string]string) (map[string]pklCl
 		classes[cls.name] = prior
 	}
 	return classes, nil
+}
+
+// isSubformElement reports whether an element nests further options, and so
+// resolves to a generated class rather than to a leaf type.
+func isSubformElement(element string) bool {
+	return element == "subform" || element == "subform_array"
 }
 
 // optionType returns the Pkl type for an option declared with the given form
@@ -339,9 +410,11 @@ func renderClasses(classes []pklClass) string {
 func classDoc(cls pklClass) string {
 	if cls.name == settingsClassName {
 		return "/// A contact point's type-specific settings. Every option any notifier\n" +
-			"/// type declares is present as an optional property, so a key Grafana does\n" +
-			"/// not accept for the declared type is a Pkl type error rather than a\n" +
-			"/// setting silently dropped on submission.\n"
+			"/// type declares is present as an optional property, so an option no\n" +
+			"/// notifier declares - a misspelled key - is a Pkl type error. An option\n" +
+			"/// that belongs to a different notifier type than the one declared still\n" +
+			"/// evaluates here; the plugin rejects it when the contact point is\n" +
+			"/// submitted.\n"
 	}
 	quoted := make([]string, 0, len(cls.sources))
 	for _, source := range cls.sources {

@@ -210,6 +210,117 @@ func TestRenderContactPointSettings_IsDeterministic(t *testing.T) {
 	}
 }
 
+// leaf builds a synthetic non-subform option.
+func leaf(name, element string) Field {
+	return Field{PropertyName: name, Element: element}
+}
+
+// subform builds a synthetic subform option carrying the given nested options.
+func subform(name string, options ...Field) Field {
+	return Field{PropertyName: name, Element: "subform", SubformOptions: options}
+}
+
+// vocabulary builds a single-type synthetic notifier vocabulary.
+func vocabulary(options ...Field) []Notifier {
+	return []Notifier{{Type: "synthetic", Options: options}}
+}
+
+// TestRenderContactPointSettings_RejectsUntypableVocabularies drives synthetic
+// vocabularies through the renderer to exercise the branches a future snapshot
+// refresh could reach, each of which must fail loudly and name the option at
+// fault rather than emit a module that cannot be typed.
+func TestRenderContactPointSettings_RejectsUntypableVocabularies(t *testing.T) {
+	cases := []struct {
+		name    string
+		ns      []Notifier
+		wantErr []string
+	}{
+		{
+			name:    "unsupported element",
+			ns:      vocabulary(leaf("mystery", "date_picker")),
+			wantErr: []string{`"mystery"`, "unsupported element", `"date_picker"`},
+		},
+		{
+			name: "unresolved cross-type element conflict",
+			ns: []Notifier{
+				{Type: "a", Options: []Field{leaf("retries", "input")}},
+				{Type: "b", Options: []Field{leaf("retries", "checkbox")}},
+			},
+			wantErr: []string{`"retries"`, "different Pkl types"},
+		},
+		{
+			name: "secure subform option",
+			ns: vocabulary(Field{
+				PropertyName:   "credentials",
+				Element:        "subform",
+				Secure:         true,
+				SubformOptions: []Field{leaf("token", "input")},
+			}),
+			wantErr: []string{`"credentials"`, "marked secure"},
+		},
+		{
+			name: "one subform name with two field shapes",
+			ns: []Notifier{
+				{Type: "a", Options: []Field{subform("auth", leaf("user", "input"))}},
+				{Type: "b", Options: []Field{subform("auth", leaf("token", "input"))}},
+			},
+			wantErr: []string{`"auth"`, "more than one field shape"},
+		},
+		{
+			name: "two subform names generating one class",
+			ns: vocabulary(
+				subform("tls_config", leaf("caCertificate", "input")),
+				subform("tlsConfig", leaf("clientCertificate", "input")),
+			),
+			wantErr: []string{"tlsConfig", "tls_config", "TlsConfig", "different fields"},
+		},
+		{
+			name:    "property name that is not a Pkl identifier",
+			ns:      vocabulary(leaf("http-method", "input")),
+			wantErr: []string{`"http-method"`, "not a valid Pkl identifier"},
+		},
+		{
+			name:    "class name that is not a Pkl identifier",
+			ns:      vocabulary(subform("9lives", leaf("attempt", "input"))),
+			wantErr: []string{`"9lives"`, "not a valid Pkl identifier"},
+		},
+		{
+			name:    "class name shadowing a Pkl builtin type",
+			ns:      vocabulary(subform("string", leaf("value", "input"))),
+			wantErr: []string{`"string"`, "String", "builtin"},
+		},
+		{
+			name:    "class name colliding with the settings class",
+			ns:      vocabulary(subform("contactPointSettings", leaf("value", "input"))),
+			wantErr: []string{`"contactPointSettings"`, settingsClassName, "collides"},
+		},
+		{
+			name:    "subform element without subform options",
+			ns:      vocabulary(leaf("payload", "subform")),
+			wantErr: []string{`"payload"`, "no subform options"},
+		},
+		{
+			name:    "subform options on a non-subform element",
+			ns:      vocabulary(Field{PropertyName: "payload", Element: "input", SubformOptions: []Field{leaf("template", "input")}}),
+			wantErr: []string{`"payload"`, "nothing references"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := RenderContactPointSettings(tc.ns)
+			if err == nil {
+				t.Fatalf("expected an error, got nil")
+			}
+			for _, want := range tc.wantErr {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q does not mention %q", err, want)
+				}
+			}
+		})
+	}
+}
+
 func TestRenderContactPointSettings_MatchesTheCommittedModule(t *testing.T) {
 	source, err := RenderContactPointSettings(Baked())
 	if err != nil {

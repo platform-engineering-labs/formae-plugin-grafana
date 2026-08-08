@@ -78,9 +78,11 @@ open class HttpConfig extends formae.SubResource {
 }
 
 /// A contact point's type-specific settings. Every option any notifier
-/// type declares is present as an optional property, so a key Grafana does
-/// not accept for the declared type is a Pkl type error rather than a
-/// setting silently dropped on submission.
+/// type declares is present as an optional property, so an option no
+/// notifier declares - a misspelled key - is a Pkl type error. An option
+/// that belongs to a different notifier type than the one declared still
+/// evaluates here; the plugin rejects it when the contact point is
+/// submitted.
 @formae.SubResourceHint {}
 open class ContactPointSettings extends formae.SubResource {
   addresses: (String|formae.Resolvable)?
