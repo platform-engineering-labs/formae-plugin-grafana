@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
@@ -36,6 +37,19 @@ func newStubGrafana(t *testing.T, stub stubGrafana) *goapi.GrafanaHTTPAPI {
 		stub.getStatus = http.StatusOK
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The notifier-metadata lookup that guards a write reads the target's
+		// version and its notifier vocabulary. Reporting a version but no
+		// vocabulary sends settings validation to the baked one, which is what
+		// these tests validate against.
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/health") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"database":"ok","version":"12.0.0"}`))
+			return
+		}
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/alert-notifiers") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost:
@@ -50,9 +64,16 @@ func newStubGrafana(t *testing.T, stub stubGrafana) *goapi.GrafanaHTTPAPI {
 	}))
 	t.Cleanup(server.Close)
 
+	return clientForStub(t, server.URL)
+}
+
+// clientForStub builds a Grafana client pointed at a stub server, with the
+// credential the stub expects to see.
+func clientForStub(t *testing.T, url string) *goapi.GrafanaHTTPAPI {
+	t.Helper()
 	client, err := config.NewClient(&config.TargetConfig{
 		Type: "Grafana",
-		URL:  server.URL,
+		URL:  url,
 		Auth: json.RawMessage(`{"Type":"Token","Token":"stub-token"}`),
 	})
 	if err != nil {

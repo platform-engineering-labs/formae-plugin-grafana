@@ -16,7 +16,9 @@ func init() {
 }
 
 // ContactPointHandler implements CRUD+List for Grafana contact points.
-type ContactPointHandler struct{}
+type ContactPointHandler struct {
+	metadata notifierMetadata
+}
 
 type contactPointProps struct {
 	UID                   string         `json:"uid,omitempty"`
@@ -94,6 +96,10 @@ func (h *ContactPointHandler) Create(ctx context.Context, client *goapi.GrafanaH
 	var p contactPointProps
 	if err := json.Unmarshal(props, &p); err != nil {
 		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
+	}
+
+	if err := h.metadata.validateSettings(ctx, client, p.Type, p.Settings); err != nil {
+		return FailResult(resource.OperationCreate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
 
 	cp := &models.EmbeddedContactPoint{
@@ -176,6 +182,10 @@ func (h *ContactPointHandler) Update(ctx context.Context, client *goapi.GrafanaH
 	var p contactPointProps
 	if err := json.Unmarshal(desired, &p); err != nil {
 		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, fmt.Sprintf("invalid properties: %v", err)), nil
+	}
+
+	if err := h.metadata.validateSettings(ctx, client, p.Type, p.Settings); err != nil {
+		return FailResult(resource.OperationUpdate, resource.OperationErrorCodeInvalidRequest, err.Error()), nil
 	}
 
 	cp := &models.EmbeddedContactPoint{
