@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
 	"github.com/platform-engineering-labs/formae-plugin-grafana/internal/notifiers"
@@ -68,6 +69,21 @@ func (s *stubFetch) fetch(context.Context, *goapi.GrafanaHTTPAPI) ([]notifiers.N
 		call = len(s.vocabularies)
 	}
 	return s.vocabularies[call-1], nil
+}
+
+// vocabularyByTarget stands in for the live metadata fetch, handing each target
+// back its own vocabulary, so a test can pin what one target reports
+// independently of what another reports.
+type vocabularyByTarget struct {
+	vocabularies map[*goapi.GrafanaHTTPAPI][]notifiers.Notifier
+}
+
+func (v *vocabularyByTarget) fetch(_ context.Context, client *goapi.GrafanaHTTPAPI) ([]notifiers.Notifier, error) {
+	vocabulary, ok := v.vocabularies[client]
+	if !ok {
+		return nil, errors.New("no vocabulary registered for this target")
+	}
+	return vocabulary, nil
 }
 
 // reportedVersion is the Grafana version a stub target answers /api/health
@@ -286,9 +302,10 @@ func TestValidateSettings_UsesTheBakedVocabularyWhenTheVersionIsUnreadable(t *te
 	}
 }
 
-// The vocabulary is cached per reported Grafana version: a second lookup at the
-// same version is served from the cache, and a version change re-fetches, so a
-// target upgraded in place is validated against its new vocabulary.
+// A target's vocabulary is cached against the version it reported: a second
+// lookup at the same version is served from the cache, and a version change
+// re-fetches, so a target upgraded in place is validated against its new
+// vocabulary.
 func TestValidateSettings_CachesPerGrafanaVersion(t *testing.T) {
 	fetch := &stubFetch{vocabularies: [][]notifiers.Notifier{
 		vocabularyFor("webhook", "url"),
@@ -318,8 +335,119 @@ func TestValidateSettings_CachesPerGrafanaVersion(t *testing.T) {
 	}
 }
 
+// Two targets reporting the same Grafana version can still accept different
+// options - feature toggles, Enterprise versus OSS builds and disabled
+// integrations all change the vocabulary at a fixed version - so each is
+// validated against the vocabulary it reported, not against whichever target
+// was looked up first.
+func TestValidateSettings_ValidatesEachTargetAgainstItsOwnVocabulary(t *testing.T) {
+	first := newVersionedGrafana(t, staticVersion("12.0.0"))
+	second := newVersionedGrafana(t, staticVersion("12.0.0"))
+	metadata := &notifierMetadata{fetch: (&vocabularyByTarget{
+		vocabularies: map[*goapi.GrafanaHTTPAPI][]notifiers.Notifier{
+			first:  vocabularyFor("webhook", "url", "maxAlerts"),
+			second: append(vocabularyFor("webhook", "url", "singleEmail"), vocabularyFor("oncall", "url")...),
+		},
+	}).fetch}
+
+	if err := metadata.validateSettings(context.Background(), first, "webhook", map[string]any{"maxAlerts": "10"}); err != nil {
+		t.Errorf("a key the first target's vocabulary declares was rejected: %v", err)
+	}
+	if err := metadata.validateSettings(context.Background(), second, "webhook", map[string]any{"singleEmail": true}); err != nil {
+		t.Errorf("a key the second target's vocabulary declares was rejected: %v", err)
+	}
+	if err := metadata.validateSettings(context.Background(), second, "webhook", map[string]any{"maxAlerts": "10"}); err == nil {
+		t.Error("the second target accepted a key only the first target's vocabulary declares")
+	}
+
+	// A notifier type one target declares and the other does not is the same
+	// bleed seen through the type rather than through an option.
+	if err := metadata.validateSettings(context.Background(), second, "oncall", map[string]any{"url": "https://example.com/oncall"}); err != nil {
+		t.Errorf("a type the second target's vocabulary declares was rejected: %v", err)
+	}
+	if err := metadata.validateSettings(context.Background(), first, "oncall", map[string]any{"url": "https://example.com/oncall"}); err == nil {
+		t.Error("the first target accepted a type only the second target's vocabulary declares")
+	}
+}
+
+// A payload that parses but declares no notifier type at all is as unusable as
+// an unreadable one: caching it would reject every contact point written
+// against that target until the process restarts. It falls back to the baked
+// vocabulary - which still rejects a wrong-for-type key - and is not cached.
+func TestValidateSettings_FallsBackWhenTheFetchedVocabularyDeclaresNoNotifier(t *testing.T) {
+	unusable, err := notifiers.Parse([]byte(`[{"unexpected":"shape"}]`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	fetch := &stubFetch{vocabularies: [][]notifiers.Notifier{unusable}}
+	metadata := &notifierMetadata{fetch: fetch.fetch}
+	client := newVersionedGrafana(t, staticVersion("12.0.0"))
+
+	invalid := metadata.validateSettings(context.Background(), client, "webhook", map[string]any{"singleEmail": true})
+	if invalid == nil {
+		t.Fatal("validation failed open when the fetched vocabulary declared no notifier")
+	}
+	if !strings.Contains(invalid.Error(), `"singleEmail"`) || !strings.Contains(invalid.Error(), `"webhook"`) {
+		t.Errorf("error does not name the key and the type: %v", invalid)
+	}
+	if err := metadata.validateSettings(context.Background(), client, "webhook", map[string]any{"url": "https://example.com/hook"}); err != nil {
+		t.Errorf("the baked vocabulary rejected a key webhook accepts: %v", err)
+	}
+	if fetch.calls.Load() != 2 {
+		t.Errorf("fetches = %d, want 2: an unusable vocabulary must not be cached", fetch.calls.Load())
+	}
+}
+
+// An empty vocabulary would reject every contact point, so it is treated the
+// same way: the baked vocabulary is used, a wrong-for-type key is still
+// rejected, and nothing is cached.
+func TestValidateSettings_FallsBackWhenTheFetchedVocabularyIsEmpty(t *testing.T) {
+	fetch := &stubFetch{vocabularies: [][]notifiers.Notifier{{}}}
+	metadata := &notifierMetadata{fetch: fetch.fetch}
+	client := newVersionedGrafana(t, staticVersion("12.0.0"))
+
+	invalid := metadata.validateSettings(context.Background(), client, "webhook", map[string]any{"singleEmail": true})
+	if invalid == nil {
+		t.Fatal("validation failed open when the fetched vocabulary was empty")
+	}
+	if !strings.Contains(invalid.Error(), `"singleEmail"`) || !strings.Contains(invalid.Error(), `"webhook"`) {
+		t.Errorf("error does not name the key and the type: %v", invalid)
+	}
+	if err := metadata.validateSettings(context.Background(), client, "webhook", map[string]any{"url": "https://example.com/hook"}); err != nil {
+		t.Errorf("the baked vocabulary rejected a key webhook accepts: %v", err)
+	}
+	if fetch.calls.Load() != 2 {
+		t.Errorf("fetches = %d, want 2: an empty vocabulary must not be cached", fetch.calls.Load())
+	}
+}
+
+// One bad key repeated across the elements of a subform array is one fault, so
+// it is named once and counted once.
+func TestValidateSettings_ReportsARepeatedInvalidKeyOnce(t *testing.T) {
+	metadata := &notifierMetadata{fetch: (&stubFetch{
+		vocabularies: [][]notifiers.Notifier{vocabularyFor("opsgenie", "responders.type", "responders.username")},
+	}).fetch}
+
+	settings := map[string]any{"responders": []any{
+		map[string]any{"escalation": "primary"},
+		map[string]any{"escalation": "secondary"},
+		map[string]any{"escalation": "tertiary"},
+	}}
+	err := metadata.validateSettings(context.Background(), newVersionedGrafana(t, staticVersion("12.0.0")), "opsgenie", settings)
+	if err == nil {
+		t.Fatal("a key the subform does not accept was accepted inside an array element")
+	}
+	if got := strings.Count(err.Error(), `"responders.escalation"`); got != 1 {
+		t.Errorf("offending key named %d times, want once: %v", got, err)
+	}
+	if !strings.Contains(err.Error(), "settings key ") {
+		t.Errorf("one repeated key reported as several: %v", err)
+	}
+}
+
 // The handler is used from several goroutines at once, so the cache is shared
-// state: concurrent lookups must be safe and must still fetch once.
+// state: concurrent lookups must be safe, and once one has stored a vocabulary
+// the later ones are served from the cache.
 func TestValidateSettings_IsSafeUnderConcurrentLookups(t *testing.T) {
 	fetch := &stubFetch{vocabularies: [][]notifiers.Notifier{vocabularyFor("webhook", "url")}}
 	metadata := &notifierMetadata{fetch: fetch.fetch}
@@ -337,9 +465,63 @@ func TestValidateSettings_IsSafeUnderConcurrentLookups(t *testing.T) {
 	}
 	wg.Wait()
 
-	if fetch.calls.Load() != 1 {
-		t.Errorf("fetches = %d, want 1: concurrent lookups must share one fetch", fetch.calls.Load())
+	// Lookups racing to fill an empty cache may each fetch, which is harmless -
+	// they store the same vocabulary - but once one has stored it no further
+	// fetch is made.
+	fetched := fetch.calls.Load()
+	if fetched == 0 {
+		t.Fatal("fetches = 0, want at least 1: the live vocabulary was never read")
 	}
+	if err := metadata.validateSettings(context.Background(), client, "webhook", map[string]any{"url": "https://example.com/hook"}); err != nil {
+		t.Errorf("declared key rejected: %v", err)
+	}
+	if fetch.calls.Load() != fetched {
+		t.Errorf("fetches = %d, want %d: a lookup after the burst must be served from the cache", fetch.calls.Load(), fetched)
+	}
+}
+
+// A hung target must not stall every other contact-point validation in the
+// process: a fetch in flight for one target holds no lock another target's
+// lookup needs. Failures are deliberately not cached, so a lock held across the
+// fetch would cost every write the full client timeout, one after another.
+func TestValidateSettings_DoesNotBlockAnotherTargetBehindAnInFlightFetch(t *testing.T) {
+	slow := newVersionedGrafana(t, staticVersion("12.0.0"))
+	other := newVersionedGrafana(t, staticVersion("12.0.0"))
+	started := make(chan struct{})
+	release := make(chan struct{})
+	metadata := &notifierMetadata{fetch: func(_ context.Context, client *goapi.GrafanaHTTPAPI) ([]notifiers.Notifier, error) {
+		if client == slow {
+			close(started)
+			<-release
+		}
+		return vocabularyFor("webhook", "url"), nil
+	}}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := metadata.validateSettings(context.Background(), slow, "webhook", map[string]any{"url": "https://example.com/hook"}); err != nil {
+			t.Errorf("declared key rejected: %v", err)
+		}
+	}()
+	<-started
+
+	done := make(chan error, 1)
+	go func() {
+		done <- metadata.validateSettings(context.Background(), other, "webhook", map[string]any{"url": "https://example.com/hook"})
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("declared key rejected: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("a lookup for another target blocked behind an in-flight fetch")
+	}
+
+	close(release)
+	wg.Wait()
 }
 
 // The live vocabulary is read through the client's own transport, so it reaches

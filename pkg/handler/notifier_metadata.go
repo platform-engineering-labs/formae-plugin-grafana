@@ -20,21 +20,34 @@ import (
 // metadataFetcher reads the notifier vocabulary a Grafana target accepts.
 type metadataFetcher func(ctx context.Context, client *goapi.GrafanaHTTPAPI) ([]notifiers.Notifier, error)
 
+// vocabularyKey identifies the cached vocabulary of one target at one reported
+// Grafana version.
+//
+// The client stands in for the target's identity: exactly one client is built
+// and cached per distinct target config, so two targets never share one. Two
+// targets can report the same version and still accept different options -
+// feature toggles, Enterprise versus OSS builds and disabled integrations all
+// change the vocabulary at a fixed version - so keying on the version alone
+// would validate one target against another's vocabulary.
+//
+// The version stays in the key because a target upgraded in place keeps its
+// config, and with it its cached client, while its vocabulary changes: without
+// the version the pre-upgrade vocabulary would outlive the upgrade and reject
+// an option the upgraded target accepts.
+type vocabularyKey struct {
+	client  *goapi.GrafanaHTTPAPI
+	version string
+}
+
 // notifierMetadata resolves the notifier vocabulary a contact point's settings
 // are validated against, preferring the target's live metadata and falling back
 // to the baked vocabulary. Its zero value is ready to use; fetch is a seam that
 // lets a test drive the lookup without a live target.
-//
-// The vocabulary is cached per reported Grafana version rather than per target.
-// A target upgraded in place keeps its config - and with it its cached client -
-// while its notifier vocabulary changes, so a per-target cache would keep
-// validating against the pre-upgrade vocabulary and reject an option the
-// upgraded target accepts.
 type notifierMetadata struct {
 	fetch metadataFetcher
 
-	mu        sync.Mutex
-	byVersion map[string][]notifiers.Notifier
+	mu    sync.Mutex
+	cache map[vocabularyKey][]notifiers.Notifier
 }
 
 // validateSettings rejects settings keys the declared notifier type does not
@@ -54,17 +67,23 @@ func (m *notifierMetadata) validateSettings(ctx context.Context, client *goapi.G
 		return fmt.Errorf("unknown contactPointType %q: no notifier declares it", notifierType)
 	}
 
-	var invalid []string
-	collectInvalidPaths(settings, "", accepted, &invalid)
+	invalid := make(map[string]struct{})
+	collectInvalidPaths(settings, "", accepted, invalid)
 	if len(invalid) == 0 {
 		return nil
 	}
 
-	// Sorted so the same declaration always produces the same message: map
-	// iteration order would otherwise vary from run to run.
-	sort.Strings(invalid)
-	quoted := make([]string, len(invalid))
-	for i, path := range invalid {
+	// Collected as a set so one bad key repeated across the elements of a
+	// subform array is one fault, and sorted so the same declaration always
+	// produces the same message: map iteration order would otherwise vary from
+	// run to run.
+	paths := make([]string, 0, len(invalid))
+	for path := range invalid {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	quoted := make([]string, len(paths))
+	for i, path := range paths {
 		quoted[i] = fmt.Sprintf("%q", path)
 	}
 	noun := "key"
@@ -90,13 +109,20 @@ func (m *notifierMetadata) vocabulary(ctx context.Context, client *goapi.Grafana
 		return notifiers.Baked()
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	key := vocabularyKey{client: client, version: version}
 
-	if cached, ok := m.byVersion[version]; ok {
+	m.mu.Lock()
+	cached, ok := m.cache[key]
+	m.mu.Unlock()
+	if ok {
 		return cached
 	}
 
+	// Fetched without the lock held: a hung target would otherwise stall every
+	// contact-point validation in the process, and since a failure is
+	// deliberately not cached each write would pay the full client timeout in
+	// turn. Two lookups racing to fill the same key is harmless - they store
+	// the same vocabulary.
 	fetch := m.fetch
 	if fetch == nil {
 		fetch = fetchNotifierMetadata
@@ -107,23 +133,40 @@ func (m *notifierMetadata) vocabulary(ctx context.Context, client *goapi.Grafana
 			"grafana_version", version, "error", err)
 		return notifiers.Baked()
 	}
-	if len(fetched) == 0 {
-		// A vocabulary declaring no notifier at all would reject every contact
-		// point, so it is treated as unreadable rather than authoritative.
-		log.Warn("validating contact point settings against the baked notifier vocabulary: the target reported no notifiers",
+	if !declaresANotifier(fetched) {
+		// A vocabulary naming no notifier type would reject every contact point
+		// written against this target until the process restarts, so a payload
+		// that yields none - empty, or of an unexpected shape that parses into
+		// typeless entries - is treated as unreadable rather than
+		// authoritative, and is not cached.
+		log.Warn("validating contact point settings against the baked notifier vocabulary: the target reported no usable notifiers",
 			"grafana_version", version)
 		return notifiers.Baked()
 	}
 
-	if m.byVersion == nil {
-		m.byVersion = make(map[string][]notifiers.Notifier)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cache == nil {
+		m.cache = make(map[vocabularyKey][]notifiers.Notifier)
 	}
-	m.byVersion[version] = fetched
+	m.cache[key] = fetched
 	return fetched
 }
 
+// declaresANotifier reports whether a vocabulary names at least one notifier
+// type, which is what makes it usable for validation.
+func declaresANotifier(ns []notifiers.Notifier) bool {
+	for _, n := range ns {
+		if n.Type != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // collectInvalidPaths walks settings, recording into invalid the dotted path of
-// every key the accepted set does not contain.
+// every key the accepted set does not contain. A set, so a key repeated across
+// the elements of a subform array is recorded once.
 //
 // It descends into an object only where the accepted set declares fields below
 // that path, which is what distinguishes a nested settings block from a
@@ -131,7 +174,7 @@ func (m *notifierMetadata) vocabulary(ctx context.Context, client *goapi.Grafana
 // PagerDuty `details`), so its contents are opaque and validating them would
 // reject every entry. Objects inside an array are the elements of a subform
 // array, whose fields hang off the array's own path.
-func collectInvalidPaths(settings map[string]any, prefix string, accepted map[string]struct{}, invalid *[]string) {
+func collectInvalidPaths(settings map[string]any, prefix string, accepted map[string]struct{}, invalid map[string]struct{}) {
 	for key, value := range settings {
 		path := key
 		if prefix != "" {
@@ -139,7 +182,7 @@ func collectInvalidPaths(settings map[string]any, prefix string, accepted map[st
 		}
 		if _, ok := accepted[path]; !ok {
 			// A key that is not accepted makes its contents moot.
-			*invalid = append(*invalid, path)
+			invalid[path] = struct{}{}
 			continue
 		}
 		if !hasNestedPaths(path, accepted) {
