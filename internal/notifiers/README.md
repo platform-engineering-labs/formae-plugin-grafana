@@ -27,3 +27,8 @@ This curls `GET /api/alert-notifiers` and rewrites `alert-notifiers.json` in
 place. Regeneration is a deliberate act taken at release time, against a
 pinned Grafana version, producing a reviewable diff — it is not run as part
 of routine builds or CI.
+
+The Pkl type for a contact point's settings is derived from this snapshot, so
+after refreshing it run `make generate` and commit the regenerated
+`schema/pkl/alerting/generated/contact_point_settings.pkl` alongside. A unit
+test fails when the committed module no longer matches the snapshot.
