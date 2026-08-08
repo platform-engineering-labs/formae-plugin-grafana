@@ -2,6 +2,7 @@
 module alerting.contact_point
 
 import "@formae/formae.pkl"
+import "generated/contact_point_settings.pkl"
 
 const type = "GRAFANA::Alerting::ContactPoint"
 
@@ -41,41 +42,35 @@ class ContactPoint extends formae.Resource {
   @formae.FieldHint { createOnly = true }
   contactPointType: String
 
-  /// Type-specific settings as a JSON string. This is the canonical persisted
-  /// shape of a ContactPoint's settings - even when the user submitted via
-  /// `settingsMap`, the handler stores the resolved values here. Read and
-  /// inventory always return `settings`; `hasProviderDefault` tells the
-  /// conformance harness that observing `settings` in actual state is
-  /// expected, regardless of which submission form was used.
+  /// Type-specific settings: one typed object whose keys are the options the
+  /// declared `contactPointType` accepts. Every option any notifier type
+  /// declares is available as an optional property, so an option no notifier
+  /// declares - a misspelled key - is a Pkl type error. An option that belongs
+  /// to a different notifier type than the one declared still evaluates here;
+  /// the plugin rejects it when the contact point is submitted.
+  /// Nested blocks (a webhook's `http_config.oauth2.tls_config`,
+  /// an OpsGenie `responders` entry) are typed objects of their own, and every
+  /// free-text option accepts a `formae.Resolvable`, which lets cross-plugin
+  /// wiring stay in a single apply:
   ///
-  /// Exactly one of `settings` or `settingsMap` must be set on submission.
-  ///
-  /// Do NOT use this form when any value is one Grafana treats as a secret (a
-  /// Slack `url` or `token`, a PagerDuty `integrationKey`, a webhook
-  /// `password`). Grafana stores those encrypted and returns the literal
-  /// `[REDACTED]` in their place on every read, so the declared plaintext and
-  /// the value read back occupy this same field and never compare equal: the
-  /// contact point then reports drift on every sync, permanently. Use
-  /// `settingsMap` instead, which is submission-only and never read back.
-  @formae.FieldHint { hasProviderDefault = true }
-  settings: String?
-
-  /// Type-specific settings as a key/value mapping. Each value may be a literal
-  /// string or a `formae.Resolvable` pointing at another resource's property,
-  /// which lets cross-plugin wiring stay in a single apply.
-  ///
-  /// Example - PagerDuty paging via a cross-plugin Resolvable:
-  ///   settingsMap = new Mapping {
-  ///     ["integrationKey"] = pdIntegration.res.integrationKey
+  ///   settings = new {
+  ///     integrationKey = pdIntegration.res.integrationKey
+  ///     severity = "critical"
   ///   }
   ///
-  /// Exactly one of `settings` or `settingsMap` must be set.
-  ///
-  /// Prefer this form for any contact point carrying a value Grafana treats as
-  /// a secret; see the note on `settings` for why the JSON-string form drifts
-  /// permanently in that case.
+  /// Options Grafana classifies as secret - a Slack `url` or `token`, a
+  /// PagerDuty `integrationKey`, a webhook `password` - additionally accept a
+  /// `formae.SecretValue`. Those are hashed at rest and never read back:
+  /// Grafana stores them encrypted and returns the literal `[REDACTED]` on
+  /// every read, so the plugin declines to report a value it cannot observe
+  /// and formae keeps the declared one. That is a deliberate loss of
+  /// observability - a secret rotated, replaced or removed outside formae
+  /// cannot be detected, so reconciling a suspected divergence means
+  /// re-applying the declared value rather than syncing Grafana's. Every
+  /// non-secret key is drift-checked individually, so an out-of-band edit to
+  /// one setting is reported as a change to that key alone.
   @formae.FieldHint {}
-  settingsMap: Mapping<String, (String|formae.Resolvable)>?
+  settings: contact_point_settings.ContactPointSettings?
 
   /// Whether to disable sending resolve notifications.
   @formae.FieldHint {}

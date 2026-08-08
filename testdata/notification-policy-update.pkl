@@ -26,7 +26,10 @@ forma {
     uid = "formae-test-npcp-\(testRunID)"
     name = "formae-test-np-receiver-\(testRunID)"
     contactPointType = "email"
-    settings = #"{"addresses":"formae-test-np@example.com","singleEmail":true}"#
+    settings = new {
+      addresses = "formae-test-np@example.com"
+      singleEmail = true
+    }
   }
   testContactPoint
 
