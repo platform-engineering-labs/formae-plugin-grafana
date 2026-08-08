@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
 	"github.com/grafana/grafana-openapi-client-go/client/provisioning"
 	"github.com/grafana/grafana-openapi-client-go/models"
+	"github.com/platform-engineering-labs/formae-plugin-grafana/internal/notifiers"
 	"github.com/platform-engineering-labs/formae/pkg/plugin/resource"
 )
 
@@ -32,8 +35,42 @@ type contactPointProps struct {
 // as secret: those are stored encrypted and never readable back.
 const redactedSentinel = "[REDACTED]"
 
-// stripRedacted returns v with every key whose value is exactly the redacted
-// sentinel removed, recursing through nested objects and through objects inside
+// secretOptionNames is the set of option names Grafana classifies as secret,
+// taken from the embedded notifier snapshot and computed once. Deciding whether
+// a value is a redacted secret must not put a network call on the read path.
+var secretOptionNames = sync.OnceValue(func() map[string]struct{} {
+	return notifiers.SecretNames(notifiers.Baked())
+})
+
+// isRedactedSecret reports whether the option at key holds a secret Grafana
+// redacted, which takes two signals together: the value is exactly the
+// sentinel, and the option's own name is one Grafana classifies as secret. The
+// name is the last segment of key, which is how the classification is keyed, so
+// a nested option matches under its own name whether it arrives inside its
+// parent object or flattened into a dotted key.
+//
+// Neither signal carries on its own. The value alone would hide a non-secret
+// option an operator set to that literal - a webhook title of "[REDACTED]" is a
+// value Grafana hands back verbatim, and dropping it would exempt it from the
+// drift check. The classification alone would hide a webhook `url`: the name is
+// secure for the types that redact it (slack, discord, victorops), but webhook,
+// pagerduty, teams and oncall return the real endpoint, which stays reported
+// precisely because its value is then not the sentinel.
+func isRedactedSecret(key string, value any) bool {
+	s, ok := value.(string)
+	if !ok || s != redactedSentinel {
+		return false
+	}
+	name := key
+	if i := strings.LastIndex(key, "."); i >= 0 {
+		name = key[i+1:]
+	}
+	_, secret := secretOptionNames()[name]
+	return secret
+}
+
+// stripRedacted returns v with every key holding a redacted secret removed,
+// recursing through nested objects and through objects inside
 // arrays. A stripped key is one the plugin declines to report, so formae's
 // property merge keeps the author's declared value while every observable key
 // stays reported and drift-checked individually. An object left empty by
@@ -49,7 +86,7 @@ func stripRedacted(v any) any {
 	case map[string]any:
 		cleaned := make(map[string]any, len(val))
 		for k, item := range val {
-			if s, ok := item.(string); ok && s == redactedSentinel {
+			if isRedactedSecret(k, item) {
 				continue
 			}
 			stripped := stripRedacted(item)

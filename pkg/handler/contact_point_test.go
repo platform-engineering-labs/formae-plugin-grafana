@@ -102,10 +102,10 @@ func TestStripRedacted_RemovesSentinelValuesRecursively(t *testing.T) {
 	in := map[string]any{
 		"url":   "https://hooks.example.com/services/T000",
 		"token": "[REDACTED]",
-		"httpConfig": map[string]any{
+		"http_config": map[string]any{
 			"oauth2": map[string]any{
-				"clientId":     "formae",
-				"clientSecret": "[REDACTED]",
+				"client_id":     "formae",
+				"client_secret": "[REDACTED]",
 			},
 		},
 		"hmacConfig": map[string]any{
@@ -132,18 +132,18 @@ func TestStripRedacted_RemovesSentinelValuesRecursively(t *testing.T) {
 		t.Errorf("non-secret sibling not preserved: %v", got["url"])
 	}
 
-	httpConfig, ok := got["httpConfig"].(map[string]any)
+	httpConfig, ok := got["http_config"].(map[string]any)
 	if !ok {
-		t.Fatalf("httpConfig = %#v, want map[string]any", got["httpConfig"])
+		t.Fatalf("http_config = %#v, want map[string]any", got["http_config"])
 	}
 	oauth2, ok := httpConfig["oauth2"].(map[string]any)
 	if !ok {
-		t.Fatalf("httpConfig.oauth2 = %#v, want map[string]any", httpConfig["oauth2"])
+		t.Fatalf("http_config.oauth2 = %#v, want map[string]any", httpConfig["oauth2"])
 	}
-	if _, present := oauth2["clientSecret"]; present {
+	if _, present := oauth2["client_secret"]; present {
 		t.Errorf("redacted key two levels deep reported: %v", oauth2)
 	}
-	if oauth2["clientId"] != "formae" {
+	if oauth2["client_id"] != "formae" {
 		t.Errorf("nested non-secret sibling not preserved: %v", oauth2)
 	}
 
@@ -196,6 +196,74 @@ func TestStripRedacted_KeepsValuesThatOnlyContainTheSentinel(t *testing.T) {
 	}
 	if got["maxAlerts"] != float64(10) {
 		t.Errorf("non-string value dropped: %v", got)
+	}
+}
+
+// The sentinel is only evidence of a redacted secret on an option Grafana
+// classifies as secret. An operator can set a plain option - a webhook title,
+// its message - to that literal, and Grafana hands it back verbatim because it
+// never redacted it. Dropping it would hide the value from the drift check and
+// let the merge keep whatever the author declared.
+func TestStripRedacted_KeepsNonSecretOptionSetToTheSentinelLiteral(t *testing.T) {
+	in := map[string]any{
+		"title":   redactedSentinel,
+		"message": redactedSentinel,
+		"hmacConfig": map[string]any{
+			"header": redactedSentinel,
+		},
+	}
+
+	got, ok := stripRedacted(in).(map[string]any)
+	if !ok {
+		t.Fatalf("stripRedacted returned %T, want map[string]any", stripRedacted(in))
+	}
+	if got["title"] != redactedSentinel {
+		t.Errorf("non-secret option set to the sentinel stripped: %v", got)
+	}
+	if got["message"] != redactedSentinel {
+		t.Errorf("non-secret option set to the sentinel stripped: %v", got)
+	}
+	hmacConfig, ok := got["hmacConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("hmacConfig = %#v, want map[string]any", got["hmacConfig"])
+	}
+	if hmacConfig["header"] != redactedSentinel {
+		t.Errorf("nested non-secret option set to the sentinel stripped: %v", hmacConfig)
+	}
+}
+
+// The companion to the case above: on an option Grafana does classify as
+// secret, the sentinel is exactly what a read returns for the encrypted value,
+// so the key stays unreported.
+func TestStripRedacted_StripsSecretOptionSetToTheSentinel(t *testing.T) {
+	in := map[string]any{
+		"password":       redactedSentinel,
+		"integrationKey": redactedSentinel,
+		"tlsConfig": map[string]any{
+			"clientKey":          redactedSentinel,
+			"insecureSkipVerify": false,
+		},
+	}
+
+	got, ok := stripRedacted(in).(map[string]any)
+	if !ok {
+		t.Fatalf("stripRedacted returned %T, want map[string]any", stripRedacted(in))
+	}
+	if _, present := got["password"]; present {
+		t.Errorf("redacted secret reported: %v", got)
+	}
+	if _, present := got["integrationKey"]; present {
+		t.Errorf("redacted secret reported: %v", got)
+	}
+	tlsConfig, ok := got["tlsConfig"].(map[string]any)
+	if !ok {
+		t.Fatalf("tlsConfig = %#v, want map[string]any", got["tlsConfig"])
+	}
+	if _, present := tlsConfig["clientKey"]; present {
+		t.Errorf("nested redacted secret reported: %v", tlsConfig)
+	}
+	if tlsConfig["insecureSkipVerify"] != false {
+		t.Errorf("nested non-secret sibling not preserved: %v", tlsConfig)
 	}
 }
 
