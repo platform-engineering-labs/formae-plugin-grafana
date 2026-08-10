@@ -20,6 +20,9 @@ class MuteTiming extends formae.Resource {
   /// Time intervals as a JSON string.
   /// Array of time interval objects defining when notifications are muted.
   /// Each interval can specify: times, weekdays, days_of_month, months, years, location.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so key order and whitespace do not register
+  /// as a change. Read strips null-valued members, so an interval authored
+  /// with an explicit null still differs from what is recorded.
+  @formae.FieldHint { format = "json" }
   timeIntervals: String
 }

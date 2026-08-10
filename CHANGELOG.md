@@ -97,6 +97,29 @@ formae agent.
 
 ### Fixed
 
+- An alert rule, notification policy or mute timing whose content is unchanged
+  now reconciles as a true 0-change instead of reporting an update on every
+  apply. `AlertRule.data`, `AlertRule.labels`, `AlertRule.annotations`,
+  `NotificationPolicy.routes`, `NotificationPolicy.groupBy` and
+  `MuteTiming.timeIntervals` each carry a serialized JSON document in a plain
+  `String`, and none declared a format, so formae compared them byte-for-byte:
+  the authored Pkl source text against the plugin's marshalled output. Those
+  two agree on content but not on key order, so every rule drifted forever and
+  an empty change set stopped being a meaningful signal. All six are now
+  declared as serialized JSON, so both sides are canonicalized before the
+  update diff — the same declaration a dashboard's `configJson` already
+  carries.
+
+  Two consequences worth knowing. Canonicalization equates two spellings of the
+  same document, not two different documents: members Grafana populates when
+  you omit them (`queryType` and `relativeTimeRange` inside `data`), members
+  stripped on read (a null-valued member of a `timeIntervals` interval) and an
+  authored `"{}"` against an absent field are differences in content and still
+  diff — declare those values explicitly. And because these fields are now
+  parsed during the diff, a malformed JSON value can surface as a
+  planning-time failure where it was previously discarded silently and the
+  resource was written without that member.
+
 - Updating a contact point no longer records its secret settings in cleartext.
   Grafana stores the secret fields of a contact point encrypted (a Slack `url`,
   a PagerDuty `integrationKey`, a webhook `password`) and returns them as

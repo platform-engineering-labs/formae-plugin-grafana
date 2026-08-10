@@ -28,7 +28,10 @@ class NotificationPolicy extends formae.Resource {
 
   /// Fields to group alerts by (e.g., ["alertname", "grafana_folder"]).
   /// Provided as a JSON array of strings.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so whitespace does not register as a change.
+  /// Canonicalization sorts object keys and preserves array order, so the
+  /// order of the entries themselves stays significant.
+  @formae.FieldHint { format = "json" }
   groupBy: String?
 
   /// How long to wait before sending the first notification for a new group.
@@ -48,6 +51,8 @@ class NotificationPolicy extends formae.Resource {
 
   /// Child routing rules as a JSON string.
   /// Array of route objects with receiver, matchers, groupBy, etc.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so key order and whitespace do not register
+  /// as a change. Route order is preserved.
+  @formae.FieldHint { format = "json" }
   routes: String?
 }

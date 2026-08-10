@@ -44,7 +44,13 @@ class AlertRule extends formae.Resource {
 
   /// Alert query and expression definitions as a JSON string.
   /// Array of query objects with refId, datasourceUid, model, etc.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so core canonicalizes both the desired (PKL
+  /// source text) and the recorded (plugin Read) forms before the update diff.
+  /// Without it the two are compared byte-for-byte and a difference in key
+  /// order alone reports an update on every apply. Canonicalization sorts
+  /// object keys and preserves array order, so the order of the query list
+  /// stays significant.
+  @formae.FieldHint { format = "json" }
   data: String
 
   /// Behavior when the query returns no data.
@@ -58,10 +64,14 @@ class AlertRule extends formae.Resource {
   execErrState: String = "Error"
 
   /// Labels to attach to the alert. JSON string of key-value pairs.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so key order and whitespace do not register
+  /// as a change.
+  @formae.FieldHint { format = "json" }
   labels: String?
 
   /// Annotations to attach to the alert. JSON string of key-value pairs.
-  @formae.FieldHint {}
+  /// Declared as serialized JSON so key order and whitespace do not register
+  /// as a change.
+  @formae.FieldHint { format = "json" }
   annotations: String?
 }
