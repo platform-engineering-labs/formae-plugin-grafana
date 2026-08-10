@@ -73,7 +73,8 @@ verify-schema:
 	@mkdir -p schema/pkl && echo "$(PLUGIN_VERSION)" > schema/pkl/VERSION
 	$(GO) run github.com/platform-engineering-labs/formae/pkg/plugin/testutil/cmd/verify-schema --namespace $(PLUGIN_NAMESPACE) ./schema/pkl
 	@cd schema/pkl && pkl project resolve >/dev/null
-	@VIOLATIONS=$$(cd schema/pkl && pkl eval checks/field_formats.pkl); \
+	@set -e; \
+	VIOLATIONS=$$(cd schema/pkl && pkl eval checks/field_formats.pkl); \
 	if [ -n "$$VIOLATIONS" ]; then \
 		echo "FIELD FORMAT VERIFICATION FAILED - fields declare the wrong format:"; \
 		echo "$$VIOLATIONS" | sed 's/^/  - /'; \
