@@ -1,0 +1,106 @@
+/// Build-time assertion over the schema's declared field formats.
+///
+/// A `String` field that carries a serialized JSON document must declare
+/// `@formae.FieldHint { format = "json" }`. That is what tells formae to compare
+/// the field's canonical content instead of its raw bytes: without it the
+/// authored value and the value the plugin reads back are compared
+/// byte-for-byte, so a difference in key order or whitespace alone registers as
+/// a change and the resource reports an update on every apply.
+///
+/// This module reflects over each resource class's declared annotations and
+/// lists every field whose declared `format` does not match `expected` below.
+/// It declares no resource — it is a build-time check, not a resource type.
+/// `make verify-schema` evaluates it and fails when the list is non-empty.
+module checks.field_formats
+
+import "pkl:reflect"
+import "@formae/formae.pkl"
+import "../alerting/alert_rule.pkl"
+import "../alerting/mute_timing.pkl"
+import "../alerting/notification_policy.pkl"
+import "../core/dashboard.pkl"
+
+/// The `format` a single resource field is required to declare.
+class ExpectedFormat {
+  /// Resource class declaring the field.
+  clazz: Class
+
+  /// Name of the property on that class.
+  property: String
+
+  /// Value its `FieldHint.format` must carry.
+  format: String
+}
+
+/// Fields whose declared format is asserted.
+///
+/// The table is explicit, so it guards exactly these fields and not any
+/// JSON-valued field added later.
+expected: Listing<ExpectedFormat> = new {
+  new {
+    clazz = alert_rule.AlertRule
+    property = "data"
+    format = "json"
+  }
+  new {
+    clazz = alert_rule.AlertRule
+    property = "labels"
+    format = "json"
+  }
+  new {
+    clazz = alert_rule.AlertRule
+    property = "annotations"
+    format = "json"
+  }
+  new {
+    clazz = notification_policy.NotificationPolicy
+    property = "routes"
+    format = "json"
+  }
+  new {
+    clazz = notification_policy.NotificationPolicy
+    property = "groupBy"
+    format = "json"
+  }
+  new {
+    clazz = mute_timing.MuteTiming
+    property = "timeIntervals"
+    format = "json"
+  }
+  new {
+    clazz = dashboard.Dashboard
+    property = "configJson"
+    format = "json"
+  }
+}
+
+/// The format declared by a property's `FieldHint`, or `null` when the class has
+/// no such property or the property carries no `FieldHint`.
+///
+/// Annotations are matched on the imported `FieldHint` class itself rather than
+/// on its name, so an unrelated annotation with a colliding simple name cannot
+/// satisfy the assertion.
+local function declaredFormat(clazz: Class, property: String): String? =
+  let (properties = reflect.Class(clazz).properties)
+    if (!properties.containsKey(property))
+      null
+    else
+      properties[property].annotations
+        .filter((annotation) -> annotation is formae.FieldHint)
+        .map((hint) -> (hint as formae.FieldHint).format)
+        .firstOrNull
+
+local function describe(format: String?): String =
+  if (format == null) "no FieldHint, or no such property" else "\"\(format)\""
+
+/// One line per field whose declared format does not match `expected`.
+violations: List<String> = expected.toList()
+  .filter((entry) -> declaredFormat(entry.clazz, entry.property) != entry.format)
+  .map((entry) ->
+    "\(reflect.Class(entry.clazz).name).\(entry.property): declared "
+      + "\(describe(declaredFormat(entry.clazz, entry.property))), want \"\(entry.format)\""
+  )
+
+output {
+  text = violations.join("\n")
+}

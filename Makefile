@@ -67,10 +67,19 @@ lint:
 	golangci-lint run
 
 ## verify-schema: Validate PKL schema files
-## Checks that schema files are well-formed and follow formae conventions.
+## Checks that schema files are well-formed and follow formae conventions,
+## then asserts the declared formats of the serialized-JSON String fields.
 verify-schema:
 	@mkdir -p schema/pkl && echo "$(PLUGIN_VERSION)" > schema/pkl/VERSION
 	$(GO) run github.com/platform-engineering-labs/formae/pkg/plugin/testutil/cmd/verify-schema --namespace $(PLUGIN_NAMESPACE) ./schema/pkl
+	@cd schema/pkl && pkl project resolve >/dev/null
+	@VIOLATIONS=$$(cd schema/pkl && pkl eval checks/field_formats.pkl); \
+	if [ -n "$$VIOLATIONS" ]; then \
+		echo "FIELD FORMAT VERIFICATION FAILED - fields declare the wrong format:"; \
+		echo "$$VIOLATIONS" | sed 's/^/  - /'; \
+		exit 1; \
+	fi; \
+	echo "FIELD FORMAT VERIFICATION PASSED - declared formats match"
 
 ## clean: Remove build artifacts
 clean:
