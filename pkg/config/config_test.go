@@ -396,6 +396,29 @@ func TestNewHTTPClient_AcceptedProxyURLs(t *testing.T) {
 	}
 }
 
+// TestNewHTTPClient_AcceptsAnUppercaseProxyScheme verifies that a scheme spelled
+// in uppercase is accepted and reaches the transport lowercased, since URL
+// schemes are case-insensitive and the accepted-scheme check compares exactly.
+func TestNewHTTPClient_AcceptsAnUppercaseProxyScheme(t *testing.T) {
+	client, err := newHTTPClient(&TargetConfig{
+		Type:     "Grafana",
+		URL:      "https://grafana.example.com",
+		ProxyURL: "HTTP://proxy.example.com:3128",
+	})
+	require.NoError(t, err)
+
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok)
+	require.NotNil(t, transport.Proxy)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://grafana.example.com/api/folders", nil)
+	require.NoError(t, err)
+	resolved, err := transport.Proxy(req)
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	assert.Equal(t, "http://proxy.example.com:3128", resolved.String())
+}
+
 // TestNewClient_RejectsInvalidProxyURL verifies that a malformed or unsupported
 // proxy URL fails client construction, that the failure names the proxy rather
 // than the missing credentials the config also has, and that neither a
