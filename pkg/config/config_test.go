@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	goapi "github.com/grafana/grafana-openapi-client-go/client"
 	"github.com/grafana/grafana-openapi-client-go/client/folders"
@@ -58,6 +59,15 @@ func TestParseTargetConfig_BasicFields(t *testing.T) {
 	assert.NotNil(t, cfg.OrgID)
 	assert.Equal(t, int64(2), *cfg.OrgID)
 	assert.Empty(t, cfg.AuthType(), "a config without an Auth block has no auth strategy")
+}
+
+// TestParseTargetConfig_ProxyURL verifies that the ProxyUrl wire field the
+// schema emits binds to the ProxyURL config field.
+func TestParseTargetConfig_ProxyURL(t *testing.T) {
+	raw := json.RawMessage(`{"Type":"Grafana","Url":"https://grafana.example.com","ProxyUrl":"socks5://proxy.example.com:1080"}`)
+	cfg, err := ParseTargetConfig(raw)
+	require.NoError(t, err)
+	assert.Equal(t, "socks5://proxy.example.com:1080", cfg.ProxyURL)
 }
 
 func TestParseTargetConfig_TokenAuth(t *testing.T) {
@@ -276,6 +286,211 @@ func TestNewClient_NoCreds(t *testing.T) {
 	_, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no credentials")
+}
+
+// TestNewHTTPClient_NoProxyURL verifies that a target without a proxy URL gets
+// the same client as before the field existed: no explicit transport, so
+// net/http's default applies, and a 30 second timeout.
+func TestNewHTTPClient_NoProxyURL(t *testing.T) {
+	client, err := newHTTPClient(&TargetConfig{Type: "Grafana", URL: "https://grafana.example.com"})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	assert.Nil(t, client.Transport, "an unset proxy URL leaves the transport to net/http")
+	assert.Equal(t, 30*time.Second, client.Timeout)
+}
+
+// TestNewHTTPClient_ProxyURLIgnoresEnvironment verifies that a configured proxy
+// URL is used for every request regardless of the ambient proxy environment
+// variables, and that the transport carrying it keeps the default transport's
+// dialing, pooling and HTTP/2 settings.
+func TestNewHTTPClient_ProxyURLIgnoresEnvironment(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://environment-proxy.example.com:3128")
+	t.Setenv("HTTPS_PROXY", "http://environment-proxy.example.com:3128")
+	t.Setenv("NO_PROXY", "*")
+
+	const proxyURL = "socks5://proxy.example.com:1080"
+	client, err := newHTTPClient(&TargetConfig{
+		Type:     "Grafana",
+		URL:      "https://grafana.example.com",
+		ProxyURL: proxyURL,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, 30*time.Second, client.Timeout)
+
+	transport, ok := client.Transport.(*http.Transport)
+	require.True(t, ok, "a configured proxy URL installs an *http.Transport")
+	require.NotNil(t, transport.Proxy)
+
+	for _, target := range []string{
+		"http://grafana.example.com/api/folders",
+		"https://grafana.example.com/api/folders",
+		"http://127.0.0.1:3000/api/folders",
+	} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+		require.NoError(t, err)
+
+		resolved, err := transport.Proxy(req)
+		require.NoError(t, err)
+		require.NotNil(t, resolved, "%s goes through the configured proxy whatever NO_PROXY says", target)
+		assert.Equal(t, proxyURL, resolved.String())
+	}
+
+	defaults, ok := http.DefaultTransport.(*http.Transport)
+	require.True(t, ok)
+	assert.True(t, transport.ForceAttemptHTTP2, "the clone keeps HTTP/2 negotiation")
+	assert.NotZero(t, transport.MaxIdleConns, "the clone keeps an idle connection pool")
+	assert.NotZero(t, transport.IdleConnTimeout, "the clone keeps an idle connection timeout")
+	assert.NotZero(t, transport.TLSHandshakeTimeout, "the clone keeps a TLS handshake timeout")
+	assert.Equal(t, defaults.MaxIdleConns, transport.MaxIdleConns)
+	assert.Equal(t, defaults.IdleConnTimeout, transport.IdleConnTimeout)
+	assert.Equal(t, defaults.TLSHandshakeTimeout, transport.TLSHandshakeTimeout)
+	assert.Equal(t, defaults.ExpectContinueTimeout, transport.ExpectContinueTimeout)
+}
+
+// TestNewHTTPClient_AcceptedProxyURLs verifies that every advertised proxy
+// scheme is accepted and reaches the transport unchanged.
+func TestNewHTTPClient_AcceptedProxyURLs(t *testing.T) {
+	cases := []struct {
+		name     string
+		proxyURL string
+	}{
+		{name: "socks5", proxyURL: "socks5://proxy.example.com:1080"},
+		{name: "socks5h", proxyURL: "socks5h://proxy.example.com:1080"},
+		{name: "http", proxyURL: "http://proxy.example.com:3128"},
+		{name: "root path", proxyURL: "socks5://proxy.example.com:1080/"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := newHTTPClient(&TargetConfig{
+				Type:     "Grafana",
+				URL:      "https://grafana.example.com",
+				ProxyURL: tc.proxyURL,
+			})
+			require.NoError(t, err)
+
+			transport, ok := client.Transport.(*http.Transport)
+			require.True(t, ok)
+			require.NotNil(t, transport.Proxy)
+
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://grafana.example.com/api/folders", nil)
+			require.NoError(t, err)
+			resolved, err := transport.Proxy(req)
+			require.NoError(t, err)
+			require.NotNil(t, resolved)
+			assert.Equal(t, tc.proxyURL, resolved.String())
+		})
+	}
+}
+
+// TestNewClient_RejectsInvalidProxyURL verifies that a malformed or unsupported
+// proxy URL fails client construction, that the failure names the proxy rather
+// than the missing credentials the config also has, and that neither a
+// configured proxy password nor the raw configured value reaches the message.
+func TestNewClient_RejectsInvalidProxyURL(t *testing.T) {
+	const password = "hunter2"
+	unparseableWithPassword := "://proxy-user:" + password + "@nope"
+	credentialProxyURL := "socks5://proxy-user:" + password + "@proxy.example.com:1080"
+
+	cases := []struct {
+		name        string
+		proxyURL    string
+		contains    []string
+		notContains []string
+	}{
+		{
+			name:        "unparseable",
+			proxyURL:    "://nope",
+			contains:    []string{"proxy"},
+			notContains: []string{"://nope"},
+		},
+		{
+			name:        "unparseable carrying credentials",
+			proxyURL:    unparseableWithPassword,
+			contains:    []string{"proxy"},
+			notContains: []string{password, unparseableWithPassword},
+		},
+		{
+			name:     "unsupported scheme ftp",
+			proxyURL: "ftp://proxy.example.com:1080",
+			contains: []string{"ftp", "socks5", "socks5h", "http"},
+		},
+		{
+			name:     "unsupported scheme https",
+			proxyURL: "https://proxy.example.com:1080",
+			contains: []string{"https", "socks5", "socks5h", "http"},
+		},
+		{
+			name:     "scheme omitted",
+			proxyURL: "proxy.example.com:1055",
+			contains: []string{"socks5", "socks5h", "http"},
+		},
+		{
+			name:     "empty host",
+			proxyURL: "socks5://",
+			contains: []string{"host", "socks5", "socks5h", "http"},
+		},
+		{
+			name:        "credentials",
+			proxyURL:    credentialProxyURL,
+			contains:    []string{"credentials"},
+			notContains: []string{password, credentialProxyURL},
+		},
+		{
+			name:     "stray path",
+			proxyURL: "socks5://proxy.example.com:1080/socks",
+			contains: []string{"path"},
+		},
+		{
+			name:     "stray query",
+			proxyURL: "socks5://proxy.example.com:1080?resolve=remote",
+			contains: []string{"query"},
+		},
+		{
+			name:     "stray fragment",
+			proxyURL: "socks5://proxy.example.com:1080#socks",
+			contains: []string{"fragment"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GRAFANA_AUTH", "")
+
+			cfg, err := hydrate(&TargetConfig{
+				Type:     "Grafana",
+				URL:      "https://grafana.example.com",
+				ProxyURL: tc.proxyURL,
+			})
+			require.NoError(t, err)
+
+			_, err = NewClient(cfg)
+			require.Error(t, err)
+			assert.NotContains(t, err.Error(), "no credentials",
+				"the proxy URL is validated before credentials, so it is not masked by a missing one")
+			for _, want := range tc.contains {
+				assert.Contains(t, err.Error(), want)
+			}
+			for _, unwanted := range tc.notContains {
+				assert.NotContains(t, err.Error(), unwanted)
+			}
+		})
+	}
+}
+
+// TestRedactProxyURL verifies that redaction removes any credential from a
+// proxy URL and withholds a value it cannot parse.
+func TestRedactProxyURL(t *testing.T) {
+	assert.Equal(t, "socks5://proxy.example.com:1080",
+		redactProxyURL("socks5://proxy-user:hunter2@proxy.example.com:1080"))
+	assert.Equal(t, "socks5://proxy.example.com:1080",
+		redactProxyURL("socks5://proxy.example.com:1080"))
+
+	withheld := redactProxyURL("://proxy-user:hunter2@nope")
+	assert.NotContains(t, withheld, "hunter2")
+	assert.NotContains(t, withheld, "proxy-user")
 }
 
 // hydrate round-trips a hand-built TargetConfig through ParseTargetConfig so it
