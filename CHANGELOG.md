@@ -96,13 +96,12 @@ formae agent.
   `HTTPS_PROXY` and `NO_PROXY` environment variables entirely. Leaving it
   unset changes nothing: the target still dials through Go's default
   transport, which continues to honour those variables exactly as before.
-  There is no `https://` proxy yet, since a
-  TLS connection to the proxy itself generally needs a private CA or a client
-  certificate this field cannot express, and no support for proxy credentials
-  yet either. A `proxyUrl` that is malformed, names an unsupported scheme,
-  carries credentials, or is otherwise unusable is rejected as an error when
-  the client is constructed, rather than silently falling back to unproxied
-  dialing.
+  There is no `https://` proxy yet, since a TLS connection to the proxy itself
+  generally needs a private CA or a client certificate this field cannot
+  express, and no support for proxy credentials yet either. A `proxyUrl` that
+  is malformed, names an unsupported scheme, carries credentials, or is
+  otherwise unusable is rejected as an error when the client is constructed,
+  rather than silently falling back to unproxied dialing.
 
 ### Changed
 
