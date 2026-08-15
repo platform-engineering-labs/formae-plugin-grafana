@@ -155,9 +155,20 @@ new formae.Target {
   config = new grafana.Config {
     url = "https://grafana.example.com"
     // orgId = 1  // optional, defaults to token's org
+    // proxyUrl = "socks5://localhost:1080"  // optional, route this target through a proxy
   }
 }
 ```
+
+Set `proxyUrl` to route this target's HTTP traffic through a SOCKS5 or HTTP
+proxy - for example, a Grafana reachable only through a corporate proxy or a
+jump host. It accepts `socks5://`, `socks5h://` or `http://` (`socks5` and
+`socks5h` are aliases in Go and behave identically); there is no `https://`
+proxy support and no support for proxy credentials yet, and a malformed or
+unsupported `proxyUrl` is rejected when the client is built. Setting it makes
+this target ignore the ambient `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`
+environment variables entirely; leaving it unset changes nothing, and the
+target keeps honouring those variables exactly as before.
 
 ### Credentials
 

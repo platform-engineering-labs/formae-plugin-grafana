@@ -88,6 +88,22 @@ formae agent.
   Receivers named inside `routes` are part of an opaque JSON string and still
   carry no dependency edge.
 
+- The target `Config` takes an optional `proxyUrl`, scoped to that target
+  alone: no other target is affected. It accepts `socks5://`, `socks5h://` or
+  `http://`; `socks5` and `socks5h` are aliases in Go and behave identically,
+  always handing the destination hostname to the proxy rather than resolving
+  it locally. Setting it makes the target ignore the ambient `HTTP_PROXY`,
+  `HTTPS_PROXY` and `NO_PROXY` environment variables entirely. Leaving it
+  unset changes nothing: the target still dials through Go's default
+  transport, which continues to honour those variables exactly as before.
+  There is no `https://` proxy yet, since a
+  TLS connection to the proxy itself generally needs a private CA or a client
+  certificate this field cannot express, and no support for proxy credentials
+  yet either. A `proxyUrl` that is malformed, names an unsupported scheme,
+  carries credentials, or is otherwise unusable is rejected as an error when
+  the client is constructed, rather than silently falling back to unproxied
+  dialing.
+
 ### Changed
 
 - The target `Config` fields `username` and `password` are replaced by the
