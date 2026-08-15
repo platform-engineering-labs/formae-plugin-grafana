@@ -6,9 +6,17 @@ package config
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -545,6 +553,357 @@ func TestRedactProxyURL(t *testing.T) {
 	withheld := redactProxyURL("://proxy-user:hunter2@nope")
 	assert.NotContains(t, withheld, "hunter2")
 	assert.NotContains(t, withheld, "proxy-user")
+}
+
+// proxiedTargetHost is the host every proxied target names. The .invalid
+// top-level domain is reserved and never resolves, so a request reaching the
+// stub Grafana proves the hostname travelled to the proxy unresolved rather
+// than being looked up on this machine.
+const proxiedTargetHost = "grafana.example.invalid:3000"
+
+// TestNewClient_SOCKS5ProxyCarriesRequestUnresolved verifies that a target with
+// a socks5 proxy URL sends its requests through that proxy, asking it for the
+// target's hostname rather than for an address resolved locally.
+func TestNewClient_SOCKS5ProxyCarriesRequestUnresolved(t *testing.T) {
+	t.Setenv("GRAFANA_AUTH", "glsa_proxiedtoken")
+
+	rec := newAuthRecorder(t)
+	proxy := newSocksProxy(t, rec.server.Listener.Addr().String())
+
+	cfg, err := hydrate(&TargetConfig{
+		Type:     "Grafana",
+		URL:      "http://" + proxiedTargetHost,
+		ProxyURL: "socks5://" + proxy.addr(),
+	})
+	require.NoError(t, err)
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+	rec.call(t, client)
+
+	select {
+	case requested := <-proxy.requested:
+		assert.Equal(t, proxiedTargetHost, requested,
+			"the proxy is asked for the target's hostname and port, unresolved")
+	default:
+		t.Fatal("the SOCKS5 proxy was never asked to connect anywhere")
+	}
+}
+
+// TestNewClient_HTTPProxyCarriesRequest verifies that a target with an http
+// proxy URL sends its requests to that proxy in the absolute form an HTTP proxy
+// is addressed with, naming the target host.
+func TestNewClient_HTTPProxyCarriesRequest(t *testing.T) {
+	t.Setenv("GRAFANA_AUTH", "glsa_proxiedtoken")
+
+	rec := newAuthRecorder(t)
+	proxy := newHTTPProxy(t, rec.server.URL)
+
+	cfg, err := hydrate(&TargetConfig{
+		Type:     "Grafana",
+		URL:      "http://" + proxiedTargetHost,
+		ProxyURL: proxy.server.URL,
+	})
+	require.NoError(t, err)
+
+	client, err := NewClient(cfg)
+	require.NoError(t, err)
+	rec.call(t, client)
+
+	select {
+	case requestURI := <-proxy.requestURI:
+		assert.True(t, strings.HasPrefix(requestURI, "http://"+proxiedTargetHost+"/api/folders"),
+			"the proxy receives an absolute-form request URI naming the target host, got %q", requestURI)
+	default:
+		t.Fatal("the HTTP proxy never received a request")
+	}
+}
+
+// SOCKS5 wire constants, limited to the no-auth CONNECT exchange these tests
+// need.
+const (
+	socksVersion5       = 0x05
+	socksAuthNone       = 0x00
+	socksCmdConnect     = 0x01
+	socksAddrTypeIPv4   = 0x01
+	socksAddrTypeDomain = 0x03
+	socksReplySucceeded = 0x00
+)
+
+// socksHandshakeTimeout bounds the greeting and connect exchange, and
+// socksTunnelTimeout the bytes flowing afterwards, so a client that speaks
+// something else fails the test instead of hanging it.
+const (
+	socksHandshakeTimeout = 10 * time.Second
+	socksTunnelTimeout    = 30 * time.Second
+)
+
+// socksProxy is a SOCKS5 proxy that records the address it is asked to connect
+// to and then connects the caller to a fixed backend, whatever was requested.
+// It implements no-auth method negotiation and a CONNECT request carrying a
+// domain name, and nothing else: any other exchange is a test failure.
+type socksProxy struct {
+	listener  net.Listener
+	requested chan string
+
+	mu       sync.Mutex
+	conns    []net.Conn
+	shutdown bool
+}
+
+func newSocksProxy(t *testing.T, backendAddr string) *socksProxy {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	proxy := &socksProxy{listener: listener, requested: make(chan string, 1)}
+
+	var served sync.WaitGroup
+	served.Add(1)
+	go func() {
+		defer served.Done()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			if !proxy.track(conn) {
+				_ = conn.Close()
+				return
+			}
+			served.Add(1)
+			go func() {
+				defer served.Done()
+				defer func() { _ = conn.Close() }()
+				proxy.serve(t, conn, backendAddr)
+			}()
+		}
+	}()
+
+	t.Cleanup(func() {
+		proxy.mu.Lock()
+		proxy.shutdown = true
+		conns := proxy.conns
+		proxy.conns = nil
+		proxy.mu.Unlock()
+
+		_ = listener.Close()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+		served.Wait()
+	})
+
+	return proxy
+}
+
+// addr is the address a proxy URL points at this proxy with.
+func (p *socksProxy) addr() string {
+	return p.listener.Addr().String()
+}
+
+// track registers conn for closing when the test ends, reporting false once the
+// proxy is shutting down so the caller closes it straight away instead.
+func (p *socksProxy) track(conn net.Conn) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.shutdown {
+		return false
+	}
+	p.conns = append(p.conns, conn)
+	return true
+}
+
+// fail reports a deviation from the expected exchange as a test failure. It is
+// called from the proxy's own goroutines, so it uses Errorf rather than Fatalf.
+// Failures seen while the proxy is being torn down are expected and dropped.
+func (p *socksProxy) fail(t *testing.T, format string, args ...any) {
+	p.mu.Lock()
+	shutdown := p.shutdown
+	p.mu.Unlock()
+	if shutdown {
+		return
+	}
+	t.Errorf(format, args...)
+}
+
+// serve runs the exchange for one client: method negotiation, a CONNECT request
+// whose address is recorded, a success reply, then bytes piped to backendAddr.
+// Every fixed-length field is read in full, and any deviation closes the
+// connection so the client fails immediately rather than waiting on the proxy.
+func (p *socksProxy) serve(t *testing.T, conn net.Conn, backendAddr string) {
+	if err := conn.SetDeadline(time.Now().Add(socksHandshakeTimeout)); err != nil {
+		p.fail(t, "socks proxy: setting the handshake read and write deadline: %v", err)
+		return
+	}
+
+	greeting := make([]byte, 2) // version, number of offered methods
+	if _, err := io.ReadFull(conn, greeting); err != nil {
+		p.fail(t, "socks proxy: reading the greeting header: %v", err)
+		return
+	}
+	if greeting[0] != socksVersion5 {
+		p.fail(t, "socks proxy: greeting version = %#x, want %#x", greeting[0], socksVersion5)
+		return
+	}
+	methods := make([]byte, greeting[1])
+	if _, err := io.ReadFull(conn, methods); err != nil {
+		p.fail(t, "socks proxy: reading the %d offered authentication methods: %v", greeting[1], err)
+		return
+	}
+	if !slices.Contains(methods, byte(socksAuthNone)) {
+		p.fail(t, "socks proxy: offered authentication methods %#x, want no-auth (%#x) among them", methods, socksAuthNone)
+		return
+	}
+	if _, err := conn.Write([]byte{socksVersion5, socksAuthNone}); err != nil {
+		p.fail(t, "socks proxy: writing the selected authentication method: %v", err)
+		return
+	}
+
+	request := make([]byte, 4) // version, command, reserved, address type
+	if _, err := io.ReadFull(conn, request); err != nil {
+		p.fail(t, "socks proxy: reading the request header: %v", err)
+		return
+	}
+	if request[0] != socksVersion5 {
+		p.fail(t, "socks proxy: request version = %#x, want %#x", request[0], socksVersion5)
+		return
+	}
+	if request[1] != socksCmdConnect {
+		p.fail(t, "socks proxy: request command = %#x, want connect (%#x)", request[1], socksCmdConnect)
+		return
+	}
+	if request[3] != socksAddrTypeDomain {
+		p.fail(t, "socks proxy: request address type = %#x, want a domain name (%#x)", request[3], socksAddrTypeDomain)
+		return
+	}
+
+	hostLen := make([]byte, 1)
+	if _, err := io.ReadFull(conn, hostLen); err != nil {
+		p.fail(t, "socks proxy: reading the domain name length: %v", err)
+		return
+	}
+	host := make([]byte, hostLen[0])
+	if _, err := io.ReadFull(conn, host); err != nil {
+		p.fail(t, "socks proxy: reading a %d byte domain name: %v", hostLen[0], err)
+		return
+	}
+	port := make([]byte, 2)
+	if _, err := io.ReadFull(conn, port); err != nil {
+		p.fail(t, "socks proxy: reading the port: %v", err)
+		return
+	}
+	select {
+	case p.requested <- net.JoinHostPort(string(host), strconv.Itoa(int(binary.BigEndian.Uint16(port)))):
+	default:
+	}
+
+	backend, err := net.Dial("tcp", backendAddr)
+	if err != nil {
+		p.fail(t, "socks proxy: dialing the stub Grafana at %s: %v", backendAddr, err)
+		return
+	}
+	if !p.track(backend) {
+		_ = backend.Close()
+		return
+	}
+
+	// A success reply, whose bound address the client does not use.
+	reply := []byte{socksVersion5, socksReplySucceeded, 0x00, socksAddrTypeIPv4, 0, 0, 0, 0, 0, 0}
+	if _, err := conn.Write(reply); err != nil {
+		p.fail(t, "socks proxy: writing the success reply: %v", err)
+		return
+	}
+
+	if err := conn.SetDeadline(time.Now().Add(socksTunnelTimeout)); err != nil {
+		p.fail(t, "socks proxy: setting the tunnel read and write deadline: %v", err)
+		return
+	}
+	if err := backend.SetDeadline(time.Now().Add(socksTunnelTimeout)); err != nil {
+		p.fail(t, "socks proxy: setting the backend read and write deadline: %v", err)
+		return
+	}
+
+	// Either direction ending tears down both, so neither copy outlives the
+	// exchange.
+	closeBoth := func() {
+		_ = conn.Close()
+		_ = backend.Close()
+	}
+	var piped sync.WaitGroup
+	piped.Add(2)
+	go func() {
+		defer piped.Done()
+		_, _ = io.Copy(backend, conn)
+		closeBoth()
+	}()
+	go func() {
+		defer piped.Done()
+		_, _ = io.Copy(conn, backend)
+		closeBoth()
+	}()
+	piped.Wait()
+}
+
+// httpProxy is an HTTP proxy that records the request URI it was addressed with
+// and forwards the request to a fixed backend.
+type httpProxy struct {
+	server     *httptest.Server
+	requestURI chan string
+}
+
+func newHTTPProxy(t *testing.T, backendURL string) *httpProxy {
+	t.Helper()
+
+	backend, err := url.Parse(backendURL)
+	require.NoError(t, err)
+
+	proxy := &httpProxy{requestURI: make(chan string, 1)}
+	// A transport of its own, so forwarding never consults the ambient proxy
+	// environment variables.
+	forwarding := &http.Transport{}
+	forwarder := &http.Client{Transport: forwarding}
+	t.Cleanup(forwarding.CloseIdleConnections)
+
+	proxy.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case proxy.requestURI <- r.RequestURI:
+		default:
+		}
+		if !strings.HasPrefix(r.RequestURI, "http://") {
+			http.Error(w, "a proxy is addressed with an absolute-form request URI", http.StatusBadRequest)
+			return
+		}
+
+		forwarded := *backend
+		forwarded.Path = r.URL.Path
+		forwarded.RawQuery = r.URL.RawQuery
+		out, err := http.NewRequestWithContext(r.Context(), r.Method, forwarded.String(), r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		out.Header = r.Header.Clone()
+
+		resp, err := forwarder.Do(out)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		for name, values := range resp.Header {
+			for _, value := range values {
+				w.Header().Add(name, value)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	t.Cleanup(proxy.server.Close)
+
+	return proxy
 }
 
 // hydrate round-trips a hand-built TargetConfig through ParseTargetConfig so it
