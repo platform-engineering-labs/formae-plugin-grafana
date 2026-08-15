@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -234,6 +235,14 @@ func proxyTransport(rawURL string) (*http.Transport, error) {
 	if u.Hostname() == "" {
 		return nil, fmt.Errorf("proxy URL must include a host: expected one of %s followed by a host and port",
 			strings.Join(proxySchemes, ", "))
+	}
+	// url.Parse already rejects a non-numeric port; a missing port (u.Port()
+	// == "") is left to net/http's per-scheme default and is not checked here.
+	if port := u.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return nil, fmt.Errorf("proxy URL port must be between 1 and 65535: %s", redactProxyURL(rawURL))
+		}
 	}
 	if u.User != nil {
 		return nil, fmt.Errorf("proxy URL must not carry credentials: %s", redactProxyURL(rawURL))

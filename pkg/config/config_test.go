@@ -477,6 +477,16 @@ func TestNewClient_RejectsInvalidProxyURL(t *testing.T) {
 			contains:    []string{"fragment"},
 			notContains: []string{"#socks"},
 		},
+		{
+			name:     "port above the TCP range",
+			proxyURL: "socks5://proxy.example.com:70000",
+			contains: []string{"port"},
+		},
+		{
+			name:     "port zero",
+			proxyURL: "socks5://proxy.example.com:0",
+			contains: []string{"port"},
+		},
 	}
 
 	for _, tc := range cases {
