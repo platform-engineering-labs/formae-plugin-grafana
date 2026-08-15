@@ -68,7 +68,8 @@ lint:
 
 ## verify-schema: Validate PKL schema files
 ## Checks that schema files are well-formed and follow formae conventions,
-## then asserts the declared formats of the serialized-JSON String fields.
+## then asserts the declared formats of the serialized-JSON String fields,
+## then asserts the declared mutability of the target config fields.
 verify-schema:
 	@mkdir -p schema/pkl && echo "$(PLUGIN_VERSION)" > schema/pkl/VERSION
 	$(GO) run github.com/platform-engineering-labs/formae/pkg/plugin/testutil/cmd/verify-schema --namespace $(PLUGIN_NAMESPACE) ./schema/pkl
@@ -81,6 +82,14 @@ verify-schema:
 		exit 1; \
 	fi; \
 	echo "FIELD FORMAT VERIFICATION PASSED - declared formats match"
+	@set -e; \
+	VIOLATIONS=$$(cd schema/pkl && pkl eval checks/config_field_mutability.pkl); \
+	if [ -n "$$VIOLATIONS" ]; then \
+		echo "CONFIG FIELD MUTABILITY VERIFICATION FAILED - fields declare the wrong createOnly:"; \
+		echo "$$VIOLATIONS" | sed 's/^/  - /'; \
+		exit 1; \
+	fi; \
+	echo "CONFIG FIELD MUTABILITY VERIFICATION PASSED - declared mutability matches"
 
 ## clean: Remove build artifacts
 clean:
