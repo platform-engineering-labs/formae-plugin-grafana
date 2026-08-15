@@ -1,0 +1,84 @@
+/// Build-time assertion over the target config's declared mutability.
+///
+/// A target `Config` field is immutable by default: without a
+/// `@formae.ConfigFieldHint { createOnly = false }` annotation, switching the
+/// field on for a target that already exists in recorded state is classified
+/// as a replace and rejected outright. That is exactly the wrong outcome for a
+/// field like `proxyUrl`, which must be toggleable on an existing target
+/// without destroying every resource recorded against it.
+///
+/// This module reflects over the target `Config` class's declared annotations
+/// and lists every field whose declared `createOnly` does not match `expected`
+/// below. It declares no resource — it is a build-time check, not a resource
+/// type. `make verify-schema` evaluates it and fails when the list is
+/// non-empty.
+module checks.config_field_mutability
+
+import "pkl:reflect"
+import "@formae/formae.pkl"
+import "../grafana.pkl"
+
+/// The `createOnly` a single target config field is required to declare.
+class ExpectedMutability {
+  /// Target config class declaring the field.
+  clazz: Class
+
+  /// Name of the property on that class.
+  property: String
+
+  /// Value its `ConfigFieldHint.createOnly` must carry.
+  createOnly: Boolean
+}
+
+/// Fields whose declared mutability is asserted.
+///
+/// The table is explicit, so it guards exactly these fields and not any
+/// target config field added later.
+expected: Listing<ExpectedMutability> = new {
+  new {
+    clazz = grafana.Config
+    property = "proxyUrl"
+    createOnly = false
+  }
+  new {
+    clazz = grafana.Config
+    property = "orgId"
+    createOnly = false
+  }
+  new {
+    clazz = grafana.Config
+    property = "auth"
+    createOnly = false
+  }
+}
+
+/// The `createOnly` declared by a property's `ConfigFieldHint`, or `null` when
+/// the class has no such property or the property carries no `ConfigFieldHint`.
+///
+/// Annotations are matched on the imported `ConfigFieldHint` class itself
+/// rather than on its name, so an unrelated annotation with a colliding simple
+/// name cannot satisfy the assertion.
+local function declaredCreateOnly(clazz: Class, property: String): Boolean? =
+  let (properties = reflect.Class(clazz).properties)
+    if (!properties.containsKey(property))
+      null
+    else
+      properties[property].annotations
+        .filter((annotation) -> annotation is formae.ConfigFieldHint)
+        .map((hint) -> (hint as formae.ConfigFieldHint).createOnly)
+        .firstOrNull
+
+local function describe(createOnly: Boolean?): String =
+  if (createOnly == null) "no ConfigFieldHint, or no such property" else "\(createOnly)"
+
+/// One line per field whose declared mutability does not match `expected`.
+violations: List<String> = expected.toList()
+  .filter((entry) -> declaredCreateOnly(entry.clazz, entry.property) != entry.createOnly)
+  .map((entry) ->
+    "\(reflect.Class(entry.clazz).name).\(entry.property): declared "
+      + "\(describe(declaredCreateOnly(entry.clazz, entry.property))), want \(entry.createOnly)"
+  )
+
+output {
+  text = violations.join("\n")
+}

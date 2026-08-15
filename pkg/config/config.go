@@ -3,10 +3,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +37,11 @@ const (
 // Auth is absent the plugin falls back to the GRAFANA_AUTH environment
 // variable.
 //
+// ProxyURL, when set, sends this target's HTTP traffic through the named
+// socks5, socks5h or http proxy, and the ambient HTTP_PROXY, HTTPS_PROXY and
+// NO_PROXY variables are ignored for it. When it is unset those variables are
+// honoured as before.
+//
 // Deprecated: Endpoints and EndpointKey are superseded by collection resolvables
 // (MappingResolvable.at()). Use url = stack.res.endpoints.at("key") instead.
 // These fields will be removed in a future release.
@@ -42,6 +50,7 @@ type TargetConfig struct {
 	URL         string            `json:"Url,omitempty"`
 	OrgID       *int64            `json:"OrgId,omitempty"`
 	Auth        json.RawMessage   `json:"Auth,omitempty"`
+	ProxyURL    string            `json:"ProxyUrl,omitempty"`
 	Endpoints   map[string]string `json:"Endpoints,omitempty"`   // Deprecated: use resolvable url instead
 	EndpointKey string            `json:"EndpointKey,omitempty"` // Deprecated: use resolvable url instead
 }
@@ -125,7 +134,9 @@ func ParseTargetConfig(data json.RawMessage) (*TargetConfig, error) {
 //     key (eyJ…), or "user:password" for basic auth.
 //
 // An error is returned when the config has no Auth block and GRAFANA_AUTH is
-// unset.
+// unset, or when ProxyURL is not a usable proxy URL — the proxy is validated
+// first, so a broken one is reported as such rather than as a credential
+// problem.
 func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
 	u, err := url.Parse(cfg.URL)
 	if err != nil {
@@ -151,6 +162,11 @@ func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
 		Schemes:  []string{scheme},
 	}
 
+	httpClient, err := newHTTPClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := applyCredentials(cfg, transportCfg); err != nil {
 		return nil, err
 	}
@@ -159,7 +175,6 @@ func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
 		transportCfg.OrgID = *cfg.OrgID
 	}
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
 	transport := httptransport.NewWithClient(transportCfg.Host, transportCfg.BasePath, transportCfg.Schemes, httpClient)
 	if transportCfg.BasicAuth != nil {
 		password, _ := transportCfg.BasicAuth.Password()
@@ -172,6 +187,92 @@ func NewClient(cfg *TargetConfig) (*goapi.GrafanaHTTPAPI, error) {
 	}
 	client := goapi.New(transport, transportCfg, strfmt.Default)
 	return client, nil
+}
+
+// newHTTPClient builds the HTTP client the Grafana API client runs on.
+//
+// Without a proxy URL the client carries no explicit transport, so net/http's
+// default is used — including its reading of HTTP_PROXY, HTTPS_PROXY and
+// NO_PROXY. With one, an explicit transport pins every request of this target
+// to that proxy instead.
+func newHTTPClient(cfg *TargetConfig) (*http.Client, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	if cfg.ProxyURL == "" {
+		return client, nil
+	}
+
+	transport, err := proxyTransport(cfg.ProxyURL)
+	if err != nil {
+		return nil, err
+	}
+	client.Transport = transport
+	return client, nil
+}
+
+// proxySchemes are the URL schemes accepted for a proxy URL. socks5 and socks5h
+// are aliases in Go: the hostname always reaches the proxy unresolved.
+var proxySchemes = []string{"socks5", "socks5h", "http"}
+
+// proxyTransport returns a transport routing every request through rawURL,
+// which must name one of proxySchemes plus a host and carry nothing else.
+func proxyTransport(rawURL string) (*http.Transport, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		// url.Parse embeds its input in the error, and that input may carry a
+		// credential, so only the cause is reported.
+		var parseErr *url.Error
+		if errors.As(err, &parseErr) {
+			err = parseErr.Err
+		}
+		return nil, fmt.Errorf("invalid proxy URL: %w", err)
+	}
+	if !slices.Contains(proxySchemes, u.Scheme) {
+		return nil, fmt.Errorf("unsupported proxy URL scheme %q: expected one of %s",
+			u.Scheme, strings.Join(proxySchemes, ", "))
+	}
+	// Hostname(), not Host: a value such as "socks5://:1080" has a non-empty
+	// Host but no hostname, and net/http dials it on the local machine.
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("proxy URL must include a host: expected one of %s followed by a host and port",
+			strings.Join(proxySchemes, ", "))
+	}
+	// url.Parse already rejects a non-numeric port; a missing port (u.Port()
+	// == "") is left to net/http's per-scheme default and is not checked here.
+	if port := u.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return nil, fmt.Errorf("proxy URL port must be between 1 and 65535: %s", redactProxyURL(rawURL))
+		}
+	}
+	if u.User != nil {
+		return nil, fmt.Errorf("proxy URL must not carry credentials: %s", redactProxyURL(rawURL))
+	}
+	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return nil, fmt.Errorf("proxy URL must not carry a path, query or fragment: %s", redactProxyURL(rawURL))
+	}
+
+	// Clone the default transport so a proxied target keeps its dial,
+	// keep-alive, TLS handshake and idle-pool settings; fall back to a bare
+	// transport if something has replaced the default with another type.
+	transport := &http.Transport{}
+	if defaults, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = defaults.Clone()
+	}
+	transport.Proxy = http.ProxyURL(u)
+	return transport, nil
+}
+
+// redactProxyURL reduces rawURL to the part of it that is safe to display: its
+// scheme and host. Userinfo, path, query and fragment are all dropped, so no
+// credential-bearing part can reach an error message, a log or recorded state.
+// A value that does not parse is withheld entirely, since its parts cannot be
+// located.
+func redactProxyURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "(redacted)"
+	}
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host}).String()
 }
 
 // applyCredentials sets the credential fields on transportCfg from the target

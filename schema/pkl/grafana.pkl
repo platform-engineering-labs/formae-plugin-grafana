@@ -51,10 +51,35 @@ open class Config {
   @formae.ConfigFieldHint { createOnly = false }
   hidden auth: Auth?
 
+  /// Optional proxy the agent dials through to reach this target's Grafana.
+  /// Accepts `socks5://`, `socks5h://` or `http://`; not `https://`, since a
+  /// TLS connection to the proxy itself generally needs a private CA or a
+  /// client cert this field cannot express, and is rejected at client
+  /// construction. `socks5` and `socks5h` are accepted as aliases and behave
+  /// identically in Go: the destination hostname is always handed to the
+  /// proxy and never resolved locally (curl distinguishes the two; Go does
+  /// not). A proxy that requires credentials is not supported yet.
+  ///
+  /// Scoped to this target: no other target is affected. When set, the
+  /// ambient HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment variables are
+  /// ignored entirely. When left unset, nothing changes: the target keeps
+  /// dialing through Go's default transport, which still honours those
+  /// variables exactly as before.
+  ///
+  /// Mutable: like `auth` and `orgId`, the proxy is how the agent reaches
+  /// the Grafana rather than the address its resources live at, so adding,
+  /// changing or removing it updates the target instead of replacing it.
+  /// Pointing the proxy at a different Grafana is equivalent to changing
+  /// `url` and is not detected — the recorded resources would no longer
+  /// exist at the far end.
+  @formae.ConfigFieldHint { createOnly = false }
+  hidden proxyUrl: String(!isEmpty)?
+
   fixed Type: String = type
   fixed Url: String|formae.Resolvable = url
   fixed OrgId: Int? = orgId
   fixed Auth: Auth? = auth
+  fixed ProxyUrl: String? = proxyUrl
 }
 
 /// Base class for Grafana authentication strategies.
