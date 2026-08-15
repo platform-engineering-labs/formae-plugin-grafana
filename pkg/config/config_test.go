@@ -370,6 +370,7 @@ func TestNewHTTPClient_AcceptedProxyURLs(t *testing.T) {
 		{name: "socks5h", proxyURL: "socks5h://proxy.example.com:1080"},
 		{name: "http", proxyURL: "http://proxy.example.com:3128"},
 		{name: "root path", proxyURL: "socks5://proxy.example.com:1080/"},
+		{name: "IPv6 literal", proxyURL: "http://[::1]:3128"},
 	}
 
 	for _, tc := range cases {
@@ -550,9 +551,7 @@ func TestRedactProxyURL(t *testing.T) {
 		})
 	}
 
-	withheld := redactProxyURL("://proxy-user:hunter2@nope")
-	assert.NotContains(t, withheld, "hunter2")
-	assert.NotContains(t, withheld, "proxy-user")
+	assert.Equal(t, "(redacted)", redactProxyURL("://proxy-user:hunter2@nope"))
 }
 
 // proxiedTargetHost is the host every proxied target names. The .invalid

@@ -255,8 +255,9 @@ func proxyTransport(rawURL string) (*http.Transport, error) {
 
 // redactProxyURL reduces rawURL to the part of it that is safe to display: its
 // scheme and host. Userinfo, path, query and fragment are all dropped, so no
-// configured value can reach an error message, a log or recorded state. A value
-// that does not parse is withheld entirely, since its parts cannot be located.
+// credential-bearing part can reach an error message, a log or recorded state.
+// A value that does not parse is withheld entirely, since its parts cannot be
+// located.
 func redactProxyURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
