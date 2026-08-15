@@ -339,6 +339,8 @@ func TestNewHTTPClient_ProxyURLIgnoresEnvironment(t *testing.T) {
 
 	defaults, ok := http.DefaultTransport.(*http.Transport)
 	require.True(t, ok)
+	assert.NotSame(t, defaults, transport,
+		"the default transport is cloned, not mutated, so one target's proxy cannot capture every other target's requests")
 	assert.True(t, transport.ForceAttemptHTTP2, "the clone keeps HTTP/2 negotiation")
 	assert.NotZero(t, transport.MaxIdleConns, "the clone keeps an idle connection pool")
 	assert.NotZero(t, transport.IdleConnTimeout, "the clone keeps an idle connection timeout")
@@ -433,25 +435,38 @@ func TestNewClient_RejectsInvalidProxyURL(t *testing.T) {
 			contains: []string{"host", "socks5", "socks5h", "http"},
 		},
 		{
+			name:     "empty host with a port",
+			proxyURL: "socks5://:1080",
+			contains: []string{"host", "socks5", "socks5h", "http"},
+		},
+		{
+			name:     "empty host with a port over http",
+			proxyURL: "http://:3128",
+			contains: []string{"host", "socks5", "socks5h", "http"},
+		},
+		{
 			name:        "credentials",
 			proxyURL:    credentialProxyURL,
 			contains:    []string{"credentials"},
 			notContains: []string{password, credentialProxyURL},
 		},
 		{
-			name:     "stray path",
-			proxyURL: "socks5://proxy.example.com:1080/socks",
-			contains: []string{"path"},
+			name:        "stray path",
+			proxyURL:    "socks5://proxy.example.com:1080/socks",
+			contains:    []string{"path"},
+			notContains: []string{"/socks"},
 		},
 		{
-			name:     "stray query",
-			proxyURL: "socks5://proxy.example.com:1080?resolve=remote",
-			contains: []string{"query"},
+			name:        "stray query",
+			proxyURL:    "socks5://proxy.example.com:1080?resolve=remote",
+			contains:    []string{"query"},
+			notContains: []string{"resolve=remote"},
 		},
 		{
-			name:     "stray fragment",
-			proxyURL: "socks5://proxy.example.com:1080#socks",
-			contains: []string{"fragment"},
+			name:        "stray fragment",
+			proxyURL:    "socks5://proxy.example.com:1080#socks",
+			contains:    []string{"fragment"},
+			notContains: []string{"#socks"},
 		},
 	}
 
@@ -480,13 +495,52 @@ func TestNewClient_RejectsInvalidProxyURL(t *testing.T) {
 	}
 }
 
-// TestRedactProxyURL verifies that redaction removes any credential from a
-// proxy URL and withholds a value it cannot parse.
+// TestRedactProxyURL verifies that redaction reduces a proxy URL to its scheme
+// and host, dropping every part that can carry a configured value, and
+// withholds a value it cannot parse.
 func TestRedactProxyURL(t *testing.T) {
-	assert.Equal(t, "socks5://proxy.example.com:1080",
-		redactProxyURL("socks5://proxy-user:hunter2@proxy.example.com:1080"))
-	assert.Equal(t, "socks5://proxy.example.com:1080",
-		redactProxyURL("socks5://proxy.example.com:1080"))
+	cases := []struct {
+		name     string
+		rawURL   string
+		expected string
+	}{
+		{
+			name:     "credential-free URL is unchanged",
+			rawURL:   "socks5://proxy.example.com:1080",
+			expected: "socks5://proxy.example.com:1080",
+		},
+		{
+			name:     "userinfo dropped",
+			rawURL:   "socks5://proxy-user:hunter2@proxy.example.com:1080",
+			expected: "socks5://proxy.example.com:1080",
+		},
+		{
+			name:     "path dropped",
+			rawURL:   "socks5://proxy.example.com:1080/socks",
+			expected: "socks5://proxy.example.com:1080",
+		},
+		{
+			name:     "query dropped",
+			rawURL:   "http://proxy.example.com:3128?token=hunter2",
+			expected: "http://proxy.example.com:3128",
+		},
+		{
+			name:     "fragment dropped",
+			rawURL:   "socks5://proxy.example.com:1080#hunter2",
+			expected: "socks5://proxy.example.com:1080",
+		},
+		{
+			name:     "every carrier dropped at once",
+			rawURL:   "socks5://proxy-user:hunter2@proxy.example.com:1080/socks?token=hunter2#hunter2",
+			expected: "socks5://proxy.example.com:1080",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, redactProxyURL(tc.rawURL))
+		})
+	}
 
 	withheld := redactProxyURL("://proxy-user:hunter2@nope")
 	assert.NotContains(t, withheld, "hunter2")

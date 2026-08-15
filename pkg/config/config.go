@@ -229,7 +229,9 @@ func proxyTransport(rawURL string) (*http.Transport, error) {
 		return nil, fmt.Errorf("unsupported proxy URL scheme %q: expected one of %s",
 			u.Scheme, strings.Join(proxySchemes, ", "))
 	}
-	if u.Host == "" {
+	// Hostname(), not Host: a value such as "socks5://:1080" has a non-empty
+	// Host but no hostname, and net/http dials it on the local machine.
+	if u.Hostname() == "" {
 		return nil, fmt.Errorf("proxy URL must include a host: expected one of %s followed by a host and port",
 			strings.Join(proxySchemes, ", "))
 	}
@@ -251,17 +253,16 @@ func proxyTransport(rawURL string) (*http.Transport, error) {
 	return transport, nil
 }
 
-// redactProxyURL returns rawURL with any userinfo removed, so a configured
-// proxy credential cannot reach an error message, a log or recorded state. A
-// value that does not parse is withheld entirely, since its userinfo cannot be
-// located.
+// redactProxyURL reduces rawURL to the part of it that is safe to display: its
+// scheme and host. Userinfo, path, query and fragment are all dropped, so no
+// configured value can reach an error message, a log or recorded state. A value
+// that does not parse is withheld entirely, since its parts cannot be located.
 func redactProxyURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "(redacted)"
 	}
-	u.User = nil
-	return u.String()
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host}).String()
 }
 
 // applyCredentials sets the credential fields on transportCfg from the target
