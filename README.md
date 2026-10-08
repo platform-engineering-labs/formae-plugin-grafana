@@ -1,7 +1,7 @@
 # Grafana Plugin for formae
 
 [![CI](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/ci.yml/badge.svg)](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/ci.yml)
-[![Nightly](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/nightly.yml/badge.svg)](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/nightly.yml)
+[![Monthly](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/monthly.yml/badge.svg)](https://github.com/platform-engineering-labs/formae-plugin-grafana/actions/workflows/monthly.yml)
 
 Manage Grafana instance resources declaratively - dashboards, data sources, folders, alerting, teams, and service accounts. Works with both self-hosted Grafana and Grafana Cloud instances.
 
